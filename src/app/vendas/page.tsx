@@ -2,10 +2,27 @@
 
 import { supabase } from '../../lib/supabase'
 import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
+import Link from 'next/link'
 
-type Cliente = { id: string; nome: string; telefone?: string }
-type Produto = { id: string; nome: string; preco_venda: number }
+type Cliente = { 
+  id: string; 
+  nome_completo: string; 
+  posto_grad?: string; 
+  telefone?: string;
+  tipo?: string; 
+}
+type Produto = { id: string; nome: string; preco_venda: number; categoria: string }
 type ItemCarrinho = { produto: Produto; quantidade: number }
+type MetodoPagamento = 'pix' | 'dinheiro' | 'cartao' | 'fiado'
+
+const ORDEM_HIERARQUICA: Record<string, number> = {
+  'Ten': 1,
+  'Sgt': 2,
+  'Cb': 3,
+  'EP': 4,
+  'EV': 5
+};
 
 export default function Vendas() {
   const [clientes, setClientes] = useState<Cliente[]>([])
@@ -13,211 +30,242 @@ export default function Vendas() {
   const [buscaCliente, setBuscaCliente] = useState('')
   const [clienteSelecionado, setClienteSelecionado] = useState<Cliente | null>(null)
   const [carrinho, setCarrinho] = useState<ItemCarrinho[]>([])
-  const [quantidadeAtual, setQuantidadeAtual] = useState(1)
   const [salvando, setSalvando] = useState(false)
+  const [metodo, setMetodo] = useState<MetodoPagamento>('pix')
 
   useEffect(() => {
     async function carregar() {
       const [resClientes, resProdutos] = await Promise.all([
-        supabase.from('clientes').select('id, nome, telefone').order('nome'),
-        supabase.from('produtos').select('id, nome, preco_venda').order('nome'),
+        supabase.from('clientes').select('id, nome_completo, posto_grad, telefone, tipo'),
+        supabase.from('produtos').select('id, nome, preco_venda, categoria').order('nome'),
       ])
-      if (resClientes.data) setClientes(resClientes.data as Cliente[])
+      
+      if (resClientes.data) {
+        const ordenados = [...resClientes.data].sort((a, b) => {
+          const pesoA = ORDEM_HIERARQUICA[a.posto_grad || ''] || 99;
+          const pesoB = ORDEM_HIERARQUICA[b.posto_grad || ''] || 99;
+          if (pesoA !== pesoB) return pesoA - pesoB;
+          return a.nome_completo.localeCompare(b.nome_completo);
+        });
+        setClientes(ordenados as Cliente[]);
+      }
       if (resProdutos.data) setProdutos(resProdutos.data as Produto[])
     }
     carregar()
   }, [])
 
-  const clientesFiltrados = buscaCliente.trim()
-    ? clientes.filter(
-        (c) =>
-          c.nome.toLowerCase().includes(buscaCliente.toLowerCase()) ||
-          (c.telefone ?? '').includes(buscaCliente)
-      )
-    : clientes
-
-  function adicionarProduto(produto: Produto) {
-    const qtd = quantidadeAtual < 1 ? 1 : quantidadeAtual
-    const jaNoCarrinho = carrinho.find((i) => i.produto.id === produto.id)
-    if (jaNoCarrinho) {
-      setCarrinho(
-        carrinho.map((i) =>
-          i.produto.id === produto.id ? { ...i, quantidade: i.quantidade + qtd } : i
-        )
-      )
-    } else {
-      setCarrinho([...carrinho, { produto, quantidade: qtd }])
-    }
-    setQuantidadeAtual(1)
-  }
-
-  function removerItem(produtoId: string) {
-    setCarrinho(carrinho.filter((i) => i.produto.id !== produtoId))
-  }
-
-  const total = carrinho.reduce(
-    (acc, item) => acc + Number(item.produto.preco_venda) * item.quantidade,
-    0
+  // Filtra apenas militares e pelo termo de busca
+  const militaresFiltrados = clientes.filter(c => 
+    c.tipo === 'militar' && 
+    c.nome_completo.toLowerCase().includes(buscaCliente.toLowerCase())
   )
 
-  async function venderFiado() {
-    if (!clienteSelecionado) {
-      alert('Escolha um cliente primeiro.')
-      return
+  function adicionarProduto(produto: Produto) {
+    const jaNoCarrinho = carrinho.find((i) => i.produto.id === produto.id)
+    if (jaNoCarrinho) {
+      setCarrinho(carrinho.map((i) =>
+        i.produto.id === produto.id ? { ...i, quantidade: i.quantidade + 1 } : i
+      ))
+    } else {
+      setCarrinho([...carrinho, { produto, quantidade: 1 }])
+      toast.info(`${produto.nome} adicionado`)
     }
-    if (carrinho.length === 0) {
-      alert('O carrinho está vazio.')
+  }
+
+  function removerUm(produtoId: string) {
+    const item = carrinho.find(i => i.produto.id === produtoId)
+    if (item && item.quantidade > 1) {
+      setCarrinho(carrinho.map(i => i.produto.id === produtoId ? { ...i, quantidade: i.quantidade - 1 } : i))
+    } else {
+      setCarrinho(carrinho.filter(i => i.produto.id !== produtoId))
+      toast.info("Item removido")
+    }
+  }
+
+  const total = carrinho.reduce((acc, item) => acc + Number(item.produto.preco_venda) * item.quantidade, 0)
+  const alimentos = produtos.filter(p => p.categoria !== 'bebida')
+  const bebidas = produtos.filter(p => p.categoria === 'bebida')
+
+  async function finalizarVenda() {
+    if (carrinho.length === 0 || !clienteSelecionado) {
+      toast.error('Selecione o cliente e adicione itens.')
       return
     }
 
     setSalvando(true)
 
-    // Inserção da venda principal
-    const { data: venda, error: errVenda } = await supabase
-      .from('vendas')
-      .insert([
-        {
+    try {
+      // 1. Verificar estoque de todos os itens antes de começar
+      for (const item of carrinho) {
+        const { data: prod } = await supabase
+          .from('produtos')
+          .select('estoque, nome')
+          .eq('id', item.produto.id)
+          .single()
+
+        if (prod && prod.estoque < item.quantidade) {
+          toast.error(`Estoque insuficiente: ${prod.nome} (Disponível: ${prod.estoque})`)
+          setSalvando(false)
+          return
+        }
+      }
+
+      // 2. Criar a Venda
+      const { data: venda, error: errVenda } = await supabase
+        .from('vendas')
+        .insert([{
           cliente_id: clienteSelecionado.id,
           valor_total: total,
-          pago: false,
-        },
-      ])
-      .select('id')
-      .single()
+          pago: metodo !== 'fiado',
+          metodo_pagamento: metodo,
+          data_venda: new Date().toISOString()
+        }])
+        .select('id').single()
 
-    if (errVenda || !venda?.id) {
+      if (errVenda || !venda) throw new Error('Erro ao criar venda')
+
+      // 3. Inserir Itens e Baixar Estoque
+      for (const item of carrinho) {
+        // Registra o item da venda
+        await supabase.from('itens_venda').insert({
+          venda_id: venda.id,
+          produto_id: item.produto.id,
+          quantidade: item.quantidade,
+          preco_unitario: Number(item.produto.preco_venda),
+        })
+
+        // Subtrai do estoque real no banco
+        const { data: prodAtual } = await supabase
+          .from('produtos')
+          .select('estoque')
+          .eq('id', item.produto.id)
+          .single()
+        
+        const novoEstoque = (prodAtual?.estoque || 0) - item.quantidade
+
+        await supabase
+          .from('produtos')
+          .update({ estoque: novoEstoque })
+          .eq('id', item.produto.id)
+      }
+
+      toast.success(`Venda para ${clienteSelecionado.nome_completo} ok! Estoque atualizado.`)
+      setCarrinho([])
+      setClienteSelecionado(null)
+      setBuscaCliente('')
+
+    } catch (err) {
+      toast.error('Ocorreu um erro ao processar a venda.')
+      console.error(err)
+    } finally {
       setSalvando(false)
-      alert('Erro ao criar venda no banco.')
-      return
     }
-
-    // Preparação dos itens para inserção em lote
-    const itens = carrinho.map((item) => ({
-      venda_id: venda.id,
-      produto_id: item.produto.id,
-      quantidade: item.quantidade,
-      preco_unitario: Number(item.produto.preco_venda),
-    }))
-
-    const { error: errItens } = await supabase.from('itens_venda').insert(itens)
-    
-    setSalvando(false)
-
-    if (errItens) {
-      alert('Venda criada, mas erro ao salvar itens. Verifique o financeiro.')
-      return
-    }
-
-    alert(`Venda registrada para ${clienteSelecionado.nome}!`)
-    setClienteSelecionado(null)
-    setCarrinho([])
-    setBuscaCliente('')
   }
 
   return (
-    <div className="min-h-screen bg-stone-100 p-6 pb-24">
+    <div className="min-h-screen bg-stone-100 p-6 pb-24 text-stone-800">
       <div className="mx-auto max-w-2xl">
-        <h1 className="mb-6 text-2xl font-black text-stone-800">Ponto de Venda</h1>
+        <h1 className="mb-6 text-2xl font-black italic">Ponto de Venda</h1>
 
         {/* Seleção de Cliente */}
         <div className="mb-6 rounded-3xl bg-white p-6 shadow-sm border border-stone-200">
-          <label className="mb-2 block text-[10px] font-black uppercase tracking-widest text-stone-400">Cliente</label>
+          <label className="mb-2 block text-[10px] font-black uppercase text-stone-400">Militar (Hierarquia)</label>
           <input
             type="text"
             value={buscaCliente}
-            onChange={(e) => setBuscaCliente(e.target.value)}
-            placeholder="Nome ou telefone..."
-            className="mb-3 w-full rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-stone-800 outline-none focus:bg-white focus:ring-2 focus:ring-stone-200 transition-all"
+            onChange={(e) => { setBuscaCliente(e.target.value); setClienteSelecionado(null); }}
+            placeholder="Pesquisar militar..."
+            className="mb-3 w-full rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 outline-none focus:bg-white transition-all"
           />
-          <div className="max-h-40 overflow-y-auto rounded-2xl border border-stone-100 bg-stone-50 shadow-inner">
-            {clientesFiltrados.length === 0 ? (
-              <p className="p-4 text-center text-xs text-stone-400">Nenhum cliente encontrado.</p>
-            ) : (
-              clientesFiltrados.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => {
-                    setClienteSelecionado(c)
-                    setBuscaCliente(c.nome)
-                  }}
-                  className={`block w-full px-4 py-3 text-left text-sm transition-colors border-b border-stone-100 last:border-0 ${
-                    clienteSelecionado?.id === c.id ? 'bg-amber-100 text-amber-900 font-bold' : 'text-stone-600 hover:bg-stone-100'
-                  }`}
-                >
-                  {c.nome} {c.telefone ? `– ${c.telefone}` : ''}
-                </button>
-              ))
+          <div className="max-h-48 overflow-y-auto rounded-2xl border border-stone-100 bg-stone-50">
+            {militaresFiltrados.map((c) => (
+              <button
+                key={c.id}
+                onClick={() => { setClienteSelecionado(c); setBuscaCliente(`${c.posto_grad} ${c.nome_completo}`) }}
+                className={`block w-full px-4 py-3 text-left text-sm border-b border-stone-100 last:border-0 ${clienteSelecionado?.id === c.id ? 'bg-amber-100 font-bold' : 'hover:bg-white'}`}
+              >
+                <span className="text-amber-600 mr-2 font-black">{c.posto_grad}</span> {c.nome_completo}
+              </button>
+            ))}
+            
+            {/* Atalho para cadastro se não encontrar ou lista vazia */}
+            {(militaresFiltrados.length === 0 && buscaCliente.trim() !== '') && (
+              <Link 
+                href="/clientes"
+                className="block w-full px-4 py-4 text-center text-xs font-black uppercase tracking-widest text-amber-600 bg-amber-50 hover:bg-amber-100"
+              >
+                + Cadastrar militar
+              </Link>
             )}
           </div>
         </div>
 
-        {/* Seleção de Produtos */}
+        {/* Produtos */}
         <div className="mb-6 rounded-3xl bg-white p-6 shadow-sm border border-stone-200">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Produtos</h2>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-black uppercase text-stone-400">Qtd:</span>
-              <input
-                type="number"
-                min="1"
-                value={quantidadeAtual}
-                onChange={(e) => setQuantidadeAtual(Number(e.target.value) || 1)}
-                className="w-16 rounded-xl border border-stone-200 bg-stone-50 px-2 py-1 text-center font-bold text-stone-800"
-              />
+          <div className="space-y-6">
+            <div>
+              <p className="mb-2 text-[10px] font-black text-amber-600 uppercase italic">🥪 Alimentos</p>
+              <div className="grid grid-cols-2 gap-2">
+                {alimentos.map(p => (
+                  <button key={p.id} onClick={() => adicionarProduto(p)} className="flex justify-between rounded-xl bg-stone-50 p-3 text-xs font-bold active:bg-stone-200 transition-all">
+                    <span>{p.nome}</span>
+                    <span className="text-stone-300">R$ {Number(p.preco_venda).toFixed(2)}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="mb-2 text-[10px] font-black text-blue-600 uppercase italic">🥤 Bebidas</p>
+              <div className="grid grid-cols-2 gap-2">
+                {bebidas.map(p => (
+                  <button key={p.id} onClick={() => adicionarProduto(p)} className="flex justify-between rounded-xl bg-stone-50 p-3 text-xs font-bold active:bg-stone-200 transition-all">
+                    <span>{p.nome}</span>
+                    <span className="text-stone-300">R$ {Number(p.preco_venda).toFixed(2)}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {produtos.map((p) => (
+        </div>
+
+        {/* Carrinho */}
+        {carrinho.length > 0 && (
+          <div className="mb-6 rounded-3xl bg-white p-6 shadow-sm border border-stone-200">
+            <h2 className="mb-3 text-[10px] font-black uppercase text-stone-400 italic">Carrinho</h2>
+            <div className="space-y-2">
+              {carrinho.map(item => (
+                <div key={item.produto.id} className="flex items-center justify-between border-b border-stone-50 pb-2">
+                  <span className="text-sm font-bold">{item.quantidade}x {item.produto.nome}</span>
+                  <button onClick={() => removerUm(item.produto.id)} className="text-red-500 font-bold text-[10px] uppercase">Remover</button>
+                </div>
+              ))}
+              <div className="pt-2 text-right">
+                <p className="text-2xl font-black text-amber-600 font-mono">R$ {total.toFixed(2)}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="mb-8 rounded-3xl bg-white p-6 shadow-sm border border-stone-200">
+          <div className="grid grid-cols-2 gap-2">
+            {(['pix', 'dinheiro', 'cartao', 'fiado'] as MetodoPagamento[]).map((m) => (
               <button
-                key={p.id}
-                type="button"
-                onClick={() => adicionarProduto(p)}
-                className="rounded-2xl bg-stone-100 px-4 py-3 text-xs font-bold text-stone-700 hover:bg-stone-800 hover:text-white transition-all active:scale-95"
+                key={m}
+                onClick={() => setMetodo(m)}
+                className={`py-4 rounded-2xl text-[10px] font-black uppercase border transition-all ${metodo === m ? 'bg-stone-800 text-white border-stone-800' : 'bg-white text-stone-400 border-stone-200'}`}
               >
-                {p.nome} • R$ {Number(p.preco_venda).toFixed(2)}
+                {m}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Carrinho */}
-        <div className="mb-8 rounded-3xl bg-white p-6 shadow-sm border border-stone-200">
-          <h2 className="mb-4 text-[10px] font-black uppercase tracking-widest text-stone-400">Resumo do Pedido</h2>
-          {carrinho.length === 0 ? (
-            <p className="py-4 text-center text-sm text-stone-400 italic">O carrinho está vazio.</p>
-          ) : (
-            <div className="space-y-3">
-              {carrinho.map((item) => (
-                <div key={item.produto.id} className="flex items-center justify-between rounded-2xl bg-stone-50 p-4 border border-stone-100">
-                  <div>
-                    <p className="text-sm font-bold text-stone-800">{item.produto.nome}</p>
-                    <p className="text-xs text-stone-500">{item.quantidade} un. × R$ {Number(item.produto.preco_venda).toFixed(2)}</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => removerItem(item.produto.id)}
-                    className="text-[10px] font-black uppercase tracking-tighter text-red-500 hover:text-red-700"
-                  >
-                    Remover
-                  </button>
-                </div>
-              ))}
-              <div className="mt-4 border-t border-stone-100 pt-4 flex justify-between items-center">
-                <span className="text-sm font-bold text-stone-400 uppercase">Total a pagar:</span>
-                <span className="text-2xl font-black text-amber-600 font-mono">R$ {total.toFixed(2)}</span>
-              </div>
-            </div>
-          )}
-        </div>
-
         <button
-          type="button"
-          onClick={venderFiado}
-          disabled={salvando || carrinho.length === 0 || !clienteSelecionado}
-          className="w-full rounded-2xl bg-stone-800 py-5 text-lg font-black uppercase tracking-widest text-white shadow-xl hover:bg-stone-900 disabled:opacity-30 transition-all active:scale-[0.98]"
+          onClick={finalizarVenda}
+          disabled={salvando || carrinho.length === 0}
+          className={`w-full rounded-2xl py-5 text-lg font-black uppercase tracking-widest text-white shadow-xl transition-all active:scale-95 ${metodo === 'fiado' ? 'bg-amber-600' : 'bg-green-600'}`}
         >
-          {salvando ? 'Processando...' : 'Confirmar Venda Fiada'}
+          {salvando ? 'Processando...' : 'Finalizar Venda'}
         </button>
       </div>
     </div>

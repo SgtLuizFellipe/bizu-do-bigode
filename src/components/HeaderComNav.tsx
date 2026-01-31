@@ -4,19 +4,18 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { BotaoSair } from './BotaoSair'
 
-// Adicionado 'default' para garantir que o import no layout funcione corretamente
 export default function HeaderComNav() {
   const pathname = usePathname()
   
-  // Não exibe o menu na tela de login
   if (pathname === '/login') return null
 
   const navLinks = [
     { name: 'Início', href: '/' },
+    { name: 'Vendas', href: '/vendas' },
     { name: 'Produtos', href: '/produtos' },
     { name: 'Clientes', href: '/clientes' },
-    { name: 'Vendas', href: '/vendas' },
     { name: 'Cobranças', href: '/cobrancas' },
+    { name: 'Extrato', href: '/extrato' },
     { name: 'Análise', href: '/analise' },
   ]
 

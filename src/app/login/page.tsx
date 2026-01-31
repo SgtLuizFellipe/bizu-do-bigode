@@ -1,8 +1,9 @@
 'use client'
 
-import { supabase } from '../../lib/supabase'
+import { createBrowserClient } from '@supabase/ssr'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner' // Importação necessária
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -10,38 +11,60 @@ export default function Login() {
   const [erro, setErro] = useState('')
   const [carregando, setCarregando] = useState(false)
   const router = useRouter()
+  
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
 
   async function entrar(e: React.FormEvent) {
     e.preventDefault()
     setErro('')
     
     if (!email.trim() || !senha) {
-      setErro('Preencha e-mail e senha.')
+      const msg = 'Preencha e-mail e senha.'
+      setErro(msg)
+      toast.error(msg)
       return
     }
 
     setCarregando(true)
-    const { error } = await supabase.auth.signInWithPassword({ 
-      email: email.trim(), 
-      password: senha 
-    })
-    
-    if (error) {
-      setErro('E-mail ou senha incorretos.')
-      setCarregando(false)
-      return
-    }
 
-    // O refresh garante que o middleware reconheça o novo cookie de sessão
-    router.refresh()
-    router.push('/')
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ 
+        email: email.trim(), 
+        password: senha 
+      })
+      
+      if (error) {
+        const msg = 'E-mail ou senha incorretos.'
+        setErro(msg)
+        toast.error(msg)
+        setCarregando(false)
+        return
+      }
+
+      toast.success('Acesso autorizado! Entrando...')
+      
+      router.refresh()
+      
+      setTimeout(() => {
+        router.push('/')
+      }, 500)
+
+    } catch (err) {
+      const msg = 'Erro ao conectar com o servidor.'
+      setErro(msg)
+      toast.error(msg)
+      setCarregando(false)
+    }
   }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-stone-100 p-6">
       <div className="w-full max-w-sm rounded-3xl bg-white p-8 shadow-sm border border-stone-200">
         <div className="mb-8 text-center">
-          <h1 className="text-2xl font-black text-stone-800">BIZU DO BIGODE</h1>
+          <h1 className="text-2xl font-black text-stone-800 italic">BIZU DO BIGODE</h1>
           <p className="text-sm font-medium text-stone-400 uppercase tracking-widest mt-1">Acesso Restrito</p>
         </div>
 
@@ -56,7 +79,6 @@ export default function Login() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="seu@email.com"
-              autoComplete="email"
               className="w-full rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-stone-800 placeholder-stone-400 focus:bg-white focus:ring-2 focus:ring-stone-200 outline-none transition-all"
             />
           </div>
@@ -71,7 +93,6 @@ export default function Login() {
               value={senha}
               onChange={(e) => setSenha(e.target.value)}
               placeholder="••••••••"
-              autoComplete="current-password"
               className="w-full rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-stone-800 placeholder-stone-400 focus:bg-white focus:ring-2 focus:ring-stone-200 outline-none transition-all"
             />
           </div>
