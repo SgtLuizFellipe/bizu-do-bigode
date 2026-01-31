@@ -4,13 +4,6 @@ import { supabase } from '../../lib/supabase'
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 
-type VendaPendente = {
-  id: string
-  cliente_id: string
-  valor_total: number
-  pago: boolean
-}
-
 type Devedor = {
   cliente_id: string
   nome: string
@@ -31,14 +24,13 @@ export default function Cobrancas() {
   async function carregar() {
     setCarregando(true)
     try {
-      // Busca 1: Vendas não pagas
       const { data: vendasData, error: errVendas } = await supabase
         .from('vendas')
         .select('id, cliente_id, valor_total, pago')
         .eq('pago', false)
       
       if (errVendas) {
-        toast.error('Erro ao buscar vendas: ' + errVendas.message)
+        toast.error('Erro ao buscar vendas.')
         return
       }
 
@@ -47,7 +39,6 @@ export default function Cobrancas() {
         return
       }
 
-      // Busca 2: Clientes com nomes de colunas corrigidos
       const { data: clientesData, error: errClientes } = await supabase
         .from('clientes')
         .select('id, nome_completo, tipo, telefone, companhia, posto_grad')
@@ -68,7 +59,6 @@ export default function Cobrancas() {
         const cliente = clientesMap.get(v.cliente_id)
         const cid = v.cliente_id
         
-        // Ajuste para usar nome_completo e posto_grad
         const nome = cliente?.nome_completo ?? 'Cliente'
         const tipo = cliente?.tipo ?? 'civil'
         const telefone = cliente?.telefone ?? ''
@@ -102,9 +92,7 @@ export default function Cobrancas() {
     }
   }
 
-  useEffect(() => {
-    carregar()
-  }, [])
+  useEffect(() => { carregar() }, [])
 
   const devedoresFiltrados = devedores.filter(d => 
     d.nome.toLowerCase().includes(busca.toLowerCase()) || 
@@ -130,75 +118,81 @@ export default function Cobrancas() {
       return
     }
     
-    toast.success(`Débito de ${devedor.nome} quitado!`)
+    toast.success(`Débito quitado com sucesso.`)
     carregar()
   }
 
   function cobrarWhatsApp(devedor: Devedor) {
     if (!devedor.telefone) {
-      toast.error('Cliente sem WhatsApp cadastrado.')
+      toast.error('WhatsApp não cadastrado.')
       return
     }
 
-    const mensagem = `Olá ${devedor.posto} ${devedor.nome}, tudo bem? Passando para lembrar do seu acerto do Bizu do Bigode. O total é R$ ${devedor.total.toFixed(2)}. Consegue realizar o Pix?`
+    const mensagem = `Olá ${devedor.posto} ${devedor.nome}, tudo bem? Gostaria de lembrá-lo do seu acerto pendente no Bizu do Bigode. O total atual é R$ ${devedor.total.toFixed(2)}.`
     const numeroLimpo = devedor.telefone.replace(/\D/g, '')
     const url = `https://wa.me/55${numeroLimpo}?text=${encodeURIComponent(mensagem)}`
     window.open(url, '_blank')
   }
 
   return (
-    <div className="min-h-screen bg-stone-100 p-6 pb-20">
+    <div className="min-h-screen bg-stone-50 p-6 pb-20">
       <div className="mx-auto max-w-2xl">
-        <h1 className="mb-6 text-xl font-bold text-stone-800 italic text-center">Cobranças Pendentes</h1>
+        <header className="mb-8 text-center">
+          <h1 className="text-xl font-medium tracking-tight text-stone-950 italic">Cobranças Pendentes</h1>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mt-1">Gestão de Créditos</p>
+        </header>
 
-        <input
-          type="text"
-          value={busca}
-          onChange={(e) => setBusca(e.target.value)}
-          placeholder="Filtrar por nome ou companhia..."
-          className="mb-6 w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 text-sm outline-none shadow-sm focus:ring-2 focus:ring-stone-200 transition-all"
-        />
+        <div className="relative mb-8">
+          <input
+            type="text"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Pesquisar por nome ou companhia..."
+            className="w-full rounded-lg border border-stone-200 bg-white px-4 py-3 text-sm text-stone-800 outline-none focus:border-stone-400 transition-all shadow-sm ring-1 ring-stone-900/5"
+          />
+        </div>
 
         {carregando ? (
-          <div className="grid gap-4 animate-pulse">
-            <div className="h-32 rounded-3xl bg-white shadow-sm" />
-            <div className="h-32 rounded-3xl bg-white shadow-sm" />
+          <div className="grid gap-4">
+            <div className="h-40 rounded-xl bg-white animate-pulse border border-stone-100" />
+            <div className="h-40 rounded-xl bg-white animate-pulse border border-stone-100" />
           </div>
         ) : devedoresFiltrados.length === 0 ? (
-          <div className="rounded-3xl bg-white p-10 text-center shadow-sm border border-stone-200">
-            <p className="text-stone-500 font-medium italic">Nenhuma pendência encontrada.</p>
+          <div className="rounded-xl bg-white p-12 text-center border border-stone-200/60 shadow-sm">
+            <p className="text-stone-400 text-sm font-medium italic">Nenhuma pendência financeira encontrada.</p>
           </div>
         ) : (
           <div className="grid gap-4">
             {devedoresFiltrados.map((d) => (
-              <div key={d.cliente_id} className="rounded-3xl bg-white p-6 shadow-sm border border-stone-200">
-                <div className="mb-4 flex justify-between items-start">
+              <div key={d.cliente_id} className="rounded-xl bg-white p-6 border border-stone-200/60 shadow-sm ring-1 ring-stone-900/5 transition-all hover:shadow-md">
+                <div className="mb-6 flex justify-between items-start">
                   <div>
-                    <h2 className="text-lg font-bold text-stone-800">
-                      <span className="text-amber-600 mr-1">{d.posto}</span> {d.nome}
+                    <h2 className="text-base font-semibold text-stone-900">
+                      <span className="text-stone-400 font-medium mr-1.5">{d.posto}</span> {d.nome}
                     </h2>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-stone-400">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mt-0.5">
                       {d.companhia} • {d.tipo}
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-xl font-black text-red-600">R$ {d.total.toFixed(2)}</p>
+                    <p className="text-lg font-bold tracking-tight text-red-600">R$ {d.total.toFixed(2)}</p>
+                    <span className="text-[8px] font-black uppercase tracking-tighter text-red-400 opacity-60">Débito em Aberto</span>
                   </div>
                 </div>
                 
-                <div className="flex gap-2">
+                <div className="flex gap-3">
                   <button
                     onClick={() => cobrarWhatsApp(d)}
-                    className="flex-1 rounded-2xl bg-green-100 py-3 text-sm font-bold text-green-700 hover:bg-green-200 transition-all"
+                    className="flex-1 rounded-lg bg-stone-50 border border-stone-200 py-2.5 text-[11px] font-bold uppercase tracking-widest text-stone-600 hover:bg-stone-100 transition-all"
                   >
-                    Cobrar Zap
+                    Notificar WhatsApp
                   </button>
                   <button
                     onClick={() => marcarComoPago(d)}
                     disabled={marcandoId === d.cliente_id}
-                    className="flex-1 rounded-2xl bg-stone-800 py-3 text-sm font-bold text-white hover:bg-stone-900 disabled:opacity-50 transition-all"
+                    className="flex-1 rounded-lg bg-stone-950 py-2.5 text-[11px] font-bold uppercase tracking-widest text-white hover:bg-stone-800 disabled:opacity-50 transition-all shadow-sm"
                   >
-                    {marcandoId === d.cliente_id ? 'Processando...' : 'Liquidar'}
+                    {marcandoId === d.cliente_id ? 'Processando...' : 'Liquidar Débito'}
                   </button>
                 </div>
               </div>

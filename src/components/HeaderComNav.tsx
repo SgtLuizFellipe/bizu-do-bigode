@@ -20,24 +20,30 @@ export default function HeaderComNav() {
   ]
 
   return (
-    <header className="sticky top-0 z-50 border-b border-stone-200 bg-white/80 backdrop-blur-md">
-      <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-3 px-4 py-3">
+    <header className="sticky top-0 z-50 border-b border-stone-200/60 bg-white/90 backdrop-blur-sm">
+      <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-4 px-6 py-4">
         <nav className="flex flex-wrap items-center gap-1">
-          {navLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={`rounded-xl px-3 py-2 text-xs font-bold transition-all ${
-                pathname === link.href
-                  ? 'bg-stone-800 text-white shadow-sm'
-                  : 'text-stone-500 hover:bg-stone-100 hover:text-stone-800'
-              }`}
-            >
-              {link.name}
-            </Link>
-          ))}
+          {navLinks.map((link) => {
+            const isActive = pathname === link.href
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={`rounded-lg px-3.5 py-1.5 text-[11px] font-medium tracking-tight transition-all duration-200 ${
+                  isActive
+                    ? 'bg-stone-950 text-white shadow-sm ring-1 ring-stone-950'
+                    : 'text-stone-500 hover:bg-stone-100 hover:text-stone-900'
+                }`}
+              >
+                {link.name}
+              </Link>
+            )
+          })}
         </nav>
-        <BotaoSair />
+        
+        <div className="flex items-center border-l border-stone-200 pl-4 ml-auto">
+          <BotaoSair />
+        </div>
       </div>
     </header>
   )

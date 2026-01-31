@@ -48,7 +48,7 @@ export default function Analise() {
         ])
         
         if (resVendas.error || resItens.error || resProdutos.error) {
-          toast.error('Erro técnico ao buscar dados.')
+          toast.error('Erro na sincronização de dados.')
           return
         }
 
@@ -79,19 +79,9 @@ export default function Analise() {
     const vendasFiltradas = vendas.filter((v) => {
       if (!v.data_venda) return false
       const dataV = new Date(v.data_venda)
-      
-      if (periodo === 'hoje') {
-        return (
-          dataV.getDate() === hoje.getDate() &&
-          dataV.getMonth() === hoje.getMonth() &&
-          dataV.getFullYear() === hoje.getFullYear()
-        )
-      } else {
-        return (
-          dataV.getMonth() === hoje.getMonth() &&
-          dataV.getFullYear() === hoje.getFullYear()
-        )
-      }
+      return periodo === 'hoje' 
+        ? dataV.toDateString() === hoje.toDateString()
+        : dataV.getMonth() === hoje.getMonth() && dataV.getFullYear() === hoje.getFullYear()
     })
 
     const idsVendasFiltradas = new Set(vendasFiltradas.map((v) => v.id))
@@ -101,9 +91,7 @@ export default function Analise() {
     const itensFiltrados = itensVenda.filter((i) => idsVendasFiltradas.has(i.venda_id))
     
     const liquido = itensFiltrados.reduce((s, i) => {
-      const custo = Number(i.custo_produto) || 0
-      const venda = Number(i.preco_unitario) || 0
-      return s + (Number(i.quantidade) * (venda - custo))
+      return s + (Number(i.quantidade) * (Number(i.preco_unitario) - Number(i.custo_produto)))
     }, 0)
 
     const porProduto = new Map<string, number>()
@@ -116,7 +104,6 @@ export default function Analise() {
       .map(([nome, qtd]) => ({ nome, quantidade: qtd }))
       .sort((a, b) => b.quantidade - a.quantidade)
 
-    // Cálculos de Patrimônio (Estoque Atual)
     const investimentoTotal = produtos.reduce((s, p) => s + (Number(p.estoque) * Number(p.preco_custo)), 0)
     const lucroPotencial = produtos.reduce((s, p) => s + (Number(p.estoque) * (Number(p.preco_venda) - Number(p.preco_custo))), 0)
 
@@ -124,56 +111,65 @@ export default function Analise() {
   }, [vendas, itensVenda, produtos, periodo])
 
   return (
-    <div className="min-h-screen bg-stone-100 p-6 pb-20">
+    <div className="min-h-screen bg-stone-50 p-6 pb-20 text-stone-900">
       <div className="mx-auto max-w-2xl">
-        <h1 className="mb-6 text-xl font-bold text-stone-800 italic text-center">Resumo Financeiro</h1>
+        <header className="mb-8 text-center">
+          <h1 className="text-xl font-medium tracking-tight text-stone-950 italic">Resumo de Performance</h1>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mt-1">Inteligência de Negócio</p>
+        </header>
 
-        <div className="mb-6 flex gap-2 bg-white p-1 rounded-2xl shadow-sm border border-stone-200">
-          <button type="button" onClick={() => setPeriodo('hoje')} className={`flex-1 rounded-xl py-3 text-sm font-semibold transition-all ${periodo === 'hoje' ? 'bg-stone-800 text-white shadow-md' : 'text-stone-500'}`}>Hoje</button>
-          <button type="button" onClick={() => setPeriodo('mes')} className={`flex-1 rounded-xl py-3 text-sm font-semibold transition-all ${periodo === 'mes' ? 'bg-stone-800 text-white shadow-md' : 'text-stone-500'}`}>Mês</button>
+        <div className="mb-8 flex gap-2 bg-white p-1 rounded-lg shadow-sm border border-stone-200/60 ring-1 ring-stone-900/5">
+          {(['hoje', 'mes'] as Periodo[]).map(p => (
+            <button key={p} onClick={() => setPeriodo(p)} className={`flex-1 rounded-md py-2.5 text-[11px] font-bold uppercase tracking-widest transition-all ${periodo === p ? 'bg-stone-950 text-white shadow-sm' : 'text-stone-400 hover:text-stone-600'}`}>
+              {p}
+            </button>
+          ))}
         </div>
 
         {carregando ? (
-          <div className="animate-pulse space-y-4">
-            <div className="h-32 rounded-3xl bg-white shadow-sm" />
-            <div className="h-64 rounded-3xl bg-white shadow-sm" />
+          <div className="animate-pulse space-y-6">
+            <div className="grid grid-cols-3 gap-4"><div className="h-24 rounded-xl bg-white" /><div className="h-24 rounded-xl bg-white" /><div className="h-24 rounded-xl bg-white" /></div>
+            <div className="h-40 rounded-xl bg-white" />
           </div>
         ) : (
           <div className="space-y-6">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <Card title="Bruto" value={stats.bruto} color="text-stone-800" />
-              <Card title="Líquido" value={stats.liquido} color="text-green-600" />
-              <Card title="Fiado" value={stats.fiado} color="text-red-600" />
+              <Card title="Receita Bruta" value={stats.bruto} color="text-stone-950" />
+              <Card title="Lucro Real" value={stats.liquido} color="text-stone-950" />
+              <Card title="Pendente (Fiado)" value={stats.fiado} color="text-red-600" />
             </div>
 
-            {/* Novo Card de Patrimônio em Estoque */}
-            <div className="rounded-3xl bg-amber-600 p-6 text-white shadow-xl shadow-amber-200/50 border border-amber-500">
-              <h2 className="mb-4 text-[10px] font-black uppercase tracking-widest opacity-80 italic">Patrimônio em Estoque</h2>
-              <div className="grid grid-cols-2 gap-4">
+            {/* Patrimônio com Design Clean */}
+            <div className="rounded-xl bg-stone-950 p-6 text-white shadow-lg shadow-stone-200/50">
+              <header className="mb-6 flex items-center justify-between border-b border-white/10 pb-3">
+                <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-50 italic">Patrimônio em Gôndola</h2>
+                <span className="text-[9px] font-medium px-2 py-0.5 rounded border border-white/20 uppercase">Ativo Físico</span>
+              </header>
+              <div className="grid grid-cols-2 gap-8">
                 <div>
-                  <p className="text-[9px] font-bold uppercase opacity-70">Capital Investido</p>
-                  <p className="text-xl font-black italic">R$ {stats.investimentoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                  <p className="text-[9px] font-bold uppercase tracking-widest opacity-40 mb-1">Custo de Inventário</p>
+                  <p className="text-2xl font-light tracking-tighter">R$ {stats.investimentoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-[9px] font-bold uppercase opacity-70">Lucro Esperado</p>
-                  <p className="text-xl font-black italic">R$ {stats.lucroPotencial.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                  <p className="text-[9px] font-bold uppercase tracking-widest opacity-40 mb-1">Projeção de Lucro</p>
+                  <p className="text-2xl font-light tracking-tighter italic text-stone-300">R$ {stats.lucroPotencial.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                 </div>
               </div>
             </div>
 
-            <div className="rounded-3xl bg-white p-6 shadow-sm border border-stone-200">
-              <h2 className="mb-4 text-lg font-bold text-stone-800 italic">Mais vendidos</h2>
+            <div className="rounded-xl bg-white p-6 border border-stone-200/60 shadow-sm ring-1 ring-stone-900/5">
+              <h2 className="mb-5 text-[10px] font-bold uppercase tracking-[0.2em] text-stone-400 italic">Ranking de Saída</h2>
               <div className="space-y-3">
                 {stats.rank.map((item, idx) => (
-                  <div key={item.nome} className="flex items-center justify-between border-b border-stone-50 pb-2">
-                    <div className="flex items-center gap-3">
-                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-stone-100 text-[10px] font-black text-stone-500">{idx + 1}</span>
-                      <span className="font-medium text-stone-700">{item.nome}</span>
+                  <div key={item.nome} className="flex items-center justify-between border-b border-stone-50 pb-3 last:border-0 last:pb-0">
+                    <div className="flex items-center gap-4">
+                      <span className="text-[10px] font-bold text-stone-300">#0{idx + 1}</span>
+                      <span className="text-sm font-medium text-stone-700">{item.nome}</span>
                     </div>
-                    <span className="text-sm font-bold text-stone-900">{item.quantidade} un.</span>
+                    <span className="text-xs font-bold text-stone-950">{item.quantidade} <span className="text-[10px] font-normal text-stone-400 uppercase ml-0.5">un</span></span>
                   </div>
                 ))}
-                {stats.rank.length === 0 && <p className="text-center py-4 text-stone-400 italic">Sem vendas registradas.</p>}
+                {stats.rank.length === 0 && <p className="text-center py-6 text-[10px] font-medium text-stone-300 uppercase italic">Nenhum dado no período</p>}
               </div>
             </div>
           </div>
@@ -185,9 +181,9 @@ export default function Analise() {
 
 function Card({ title, value, color }: { title: string; value: number; color: string }) {
   return (
-    <div className="rounded-3xl bg-white p-5 shadow-sm border border-stone-200">
-      <p className="text-[10px] font-black uppercase tracking-widest text-stone-400">{title}</p>
-      <p className={`mt-1 text-2xl font-black ${color}`}>
+    <div className="rounded-xl bg-white p-5 border border-stone-200/60 shadow-sm ring-1 ring-stone-900/5">
+      <p className="text-[9px] font-bold uppercase tracking-widest text-stone-400 mb-2">{title}</p>
+      <p className={`text-lg font-bold tracking-tight ${color}`}>
         R$ {value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
       </p>
     </div>

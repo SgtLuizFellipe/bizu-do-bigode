@@ -1,11 +1,18 @@
 import type { Metadata } from 'next'
+import { Inter } from 'next/font/google'
 import HeaderComNav from '../components/HeaderComNav'
-import { Toaster } from 'sonner' // Importa o componente de notificações
+import { Toaster } from 'sonner'
 import './globals.css'
+
+// Configuração da fonte Inter para um visual clean e profissional
+const inter = Inter({ 
+  subsets: ['latin'],
+  display: 'swap',
+})
 
 export const metadata: Metadata = {
   title: 'Bizu do Bigode',
-  description: 'Gestão do negócio',
+  description: 'Gestão de PDV Militar',
 }
 
 export default function RootLayout({
@@ -14,12 +21,22 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="pt-BR">
-      <body className="min-h-screen bg-stone-100 antialiased font-sans">
-        {/* Toaster configurado com cores ricas e posição ideal para mobile */}
-        <Toaster richColors position="top-center" />
+    <html lang="pt-BR" className="scroll-smooth">
+      <body className={`${inter.className} min-h-screen bg-stone-50 text-stone-900 antialiased`}>
+        {/* Toaster com design minimalista */}
+        <Toaster 
+          richColors 
+          position="top-center" 
+          toastOptions={{
+            style: { borderRadius: '12px' },
+          }} 
+        />
+        
         <HeaderComNav />
-        <main>{children}</main>
+        
+        <main className="mx-auto w-full transition-all duration-300">
+          {children}
+        </main>
       </body>
     </html>
   )

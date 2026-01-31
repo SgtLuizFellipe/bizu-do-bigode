@@ -29,13 +29,13 @@ export default function Extrato() {
         .order('data_venda', { ascending: false })
       
       if (errVendas) {
-        toast.error('Erro ao acessar vendas.')
+        toast.error('Erro ao acessar histórico.')
         return
       }
 
       const { data: clientesData } = await supabase
         .from('clientes')
-        .select('id, nome_completo, posto_grad') // Atualizado para colunas reais
+        .select('id, nome_completo, posto_grad')
 
       const clientesMap = new Map()
       clientesData?.forEach(c => clientesMap.set(c.id, c))
@@ -45,8 +45,8 @@ export default function Extrato() {
           const cliente = clientesMap.get(v.cliente_id)
           return {
             ...v,
-            nome_cliente: cliente?.nome_completo || 'Avulso', // Usa nome_completo
-            posto_cliente: cliente?.posto_grad || '' // Usa posto_grad
+            nome_cliente: cliente?.nome_completo || 'Avulso',
+            posto_cliente: cliente?.posto_grad || ''
           }
         })
         setVendas(formatadas)
@@ -67,50 +67,62 @@ export default function Extrato() {
   )
 
   return (
-    <div className="min-h-screen bg-stone-100 p-6 pb-20">
+    <div className="min-h-screen bg-stone-50 p-6 pb-20">
       <div className="mx-auto max-w-2xl">
-        <h1 className="mb-6 text-xl font-bold text-stone-800 italic text-center">Extrato Geral</h1>
+        <header className="mb-8 text-center">
+          <h1 className="text-xl font-medium tracking-tight text-stone-950 italic">Extrato Geral</h1>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mt-1">Histórico de Operações</p>
+        </header>
 
-        <input
-          type="text"
-          value={busca}
-          onChange={(e) => setBusca(e.target.value)}
-          placeholder="Buscar cliente ou método..."
-          className="mb-6 w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 text-sm outline-none shadow-sm focus:ring-2 focus:ring-stone-200 transition-all"
-        />
+        <div className="relative mb-8">
+          <input
+            type="text"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Filtrar por nome ou método de pagamento..."
+            className="w-full rounded-lg border border-stone-200 bg-white px-4 py-3 text-sm text-stone-800 outline-none transition-all shadow-sm ring-1 ring-stone-900/5 focus:border-stone-400"
+          />
+        </div>
 
         {carregando ? (
-          <div className="space-y-4 animate-pulse">
-            <div className="h-20 rounded-2xl bg-white shadow-sm" />
-            <div className="h-20 rounded-2xl bg-white shadow-sm" />
+          <div className="space-y-4">
+            <div className="h-20 rounded-xl bg-white animate-pulse border border-stone-100 shadow-sm" />
+            <div className="h-20 rounded-xl bg-white animate-pulse border border-stone-100 shadow-sm" />
           </div>
         ) : (
           <div className="space-y-3">
             {filtradas.map((v) => (
-              <div key={v.id} className="flex items-center justify-between rounded-2xl bg-white p-4 border border-stone-200 shadow-sm">
+              <div key={v.id} className="flex items-center justify-between rounded-xl bg-white p-5 border border-stone-200/60 shadow-sm ring-1 ring-stone-900/5 hover:shadow-md transition-all">
                 <div>
-                  <div className="flex items-center gap-1">
-                    <span className="text-[10px] font-black text-amber-600 uppercase italic">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] font-bold text-stone-400 uppercase tracking-tight">
                       {v.posto_cliente}
                     </span>
-                    <p className="text-sm font-bold text-stone-800">{v.nome_cliente}</p>
+                    <p className="text-sm font-semibold text-stone-900">{v.nome_cliente}</p>
                   </div>
-                  <p className="text-[10px] font-black uppercase text-stone-400">
-                    {v.data_venda ? new Date(v.data_venda).toLocaleDateString('pt-BR') : 'Sem data'} • {v.metodo_pagamento}
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-stone-400 mt-1">
+                    {v.data_venda ? new Date(v.data_venda).toLocaleDateString('pt-BR') : 'S/ Data'} • {v.metodo_pagamento}
                   </p>
                 </div>
+                
                 <div className="text-right">
-                  <p className={`font-mono font-black ${v.pago ? 'text-green-600' : 'text-amber-600'}`}>
+                  <p className={`text-base font-bold tracking-tight ${v.pago ? 'text-stone-900' : 'text-amber-600'}`}>
                     R$ {Number(v.valor_total).toFixed(2)}
                   </p>
-                  <span className="text-[8px] font-black uppercase tracking-tighter opacity-50">
-                    {v.pago ? 'Liquidado' : 'Pendente'}
-                  </span>
+                  <div className="flex items-center justify-end gap-1.5 mt-1">
+                    <div className={`h-1.5 w-1.5 rounded-full ${v.pago ? 'bg-green-500' : 'bg-amber-500'}`} />
+                    <span className="text-[9px] font-bold uppercase tracking-widest text-stone-400">
+                      {v.pago ? 'Liquidado' : 'Pendente'}
+                    </span>
+                  </div>
                 </div>
               </div>
             ))}
+            
             {filtradas.length === 0 && (
-              <p className="text-center py-10 text-stone-400 italic font-medium">Nenhuma venda encontrada.</p>
+              <div className="rounded-xl bg-white p-12 text-center border border-stone-200/60 shadow-sm">
+                <p className="text-stone-400 text-sm font-medium italic">Nenhum registro encontrado para esta busca.</p>
+              </div>
             )}
           </div>
         )}

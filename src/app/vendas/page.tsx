@@ -54,7 +54,6 @@ export default function Vendas() {
     carregar()
   }, [])
 
-  // Filtra apenas militares e pelo termo de busca
   const militaresFiltrados = clientes.filter(c => 
     c.tipo === 'militar' && 
     c.nome_completo.toLowerCase().includes(buscaCliente.toLowerCase())
@@ -88,14 +87,13 @@ export default function Vendas() {
 
   async function finalizarVenda() {
     if (carrinho.length === 0 || !clienteSelecionado) {
-      toast.error('Selecione o cliente e adicione itens.')
+      toast.error('Identifique o cliente e os itens.')
       return
     }
 
     setSalvando(true)
 
     try {
-      // 1. Verificar estoque de todos os itens antes de começar
       for (const item of carrinho) {
         const { data: prod } = await supabase
           .from('produtos')
@@ -104,13 +102,12 @@ export default function Vendas() {
           .single()
 
         if (prod && prod.estoque < item.quantidade) {
-          toast.error(`Estoque insuficiente: ${prod.nome} (Disponível: ${prod.estoque})`)
+          toast.error(`Estoque baixo: ${prod.nome}`)
           setSalvando(false)
           return
         }
       }
 
-      // 2. Criar a Venda
       const { data: venda, error: errVenda } = await supabase
         .from('vendas')
         .insert([{
@@ -122,11 +119,9 @@ export default function Vendas() {
         }])
         .select('id').single()
 
-      if (errVenda || !venda) throw new Error('Erro ao criar venda')
+      if (errVenda || !venda) throw new Error('Falha na venda')
 
-      // 3. Inserir Itens e Baixar Estoque
       for (const item of carrinho) {
-        // Registra o item da venda
         await supabase.from('itens_venda').insert({
           venda_id: venda.id,
           produto_id: item.produto.id,
@@ -134,125 +129,119 @@ export default function Vendas() {
           preco_unitario: Number(item.produto.preco_venda),
         })
 
-        // Subtrai do estoque real no banco
         const { data: prodAtual } = await supabase
           .from('produtos')
           .select('estoque')
           .eq('id', item.produto.id)
           .single()
         
-        const novoEstoque = (prodAtual?.estoque || 0) - item.quantidade
-
         await supabase
           .from('produtos')
-          .update({ estoque: novoEstoque })
+          .update({ estoque: (prodAtual?.estoque || 0) - item.quantidade })
           .eq('id', item.produto.id)
       }
 
-      toast.success(`Venda para ${clienteSelecionado.nome_completo} ok! Estoque atualizado.`)
-      setCarrinho([])
-      setClienteSelecionado(null)
-      setBuscaCliente('')
+      toast.success(`Operação concluída.`)
+      setCarrinho([]); setClienteSelecionado(null); setBuscaCliente('');
 
     } catch (err) {
-      toast.error('Ocorreu um erro ao processar a venda.')
-      console.error(err)
+      toast.error('Erro ao processar venda.')
     } finally {
       setSalvando(false)
     }
   }
 
   return (
-    <div className="min-h-screen bg-stone-100 p-6 pb-24 text-stone-800">
+    <div className="min-h-screen bg-stone-50 p-6 pb-24 text-stone-900">
       <div className="mx-auto max-w-2xl">
-        <h1 className="mb-6 text-2xl font-black italic">Ponto de Venda</h1>
+        <header className="mb-8 text-center">
+          <h1 className="text-xl font-medium tracking-tight text-stone-950 italic">Ponto de Venda</h1>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mt-1">Terminal de Operações</p>
+        </header>
 
         {/* Seleção de Cliente */}
-        <div className="mb-6 rounded-3xl bg-white p-6 shadow-sm border border-stone-200">
-          <label className="mb-2 block text-[10px] font-black uppercase text-stone-400">Militar (Hierarquia)</label>
+        <section className="mb-6 rounded-xl bg-white p-6 shadow-sm border border-stone-200/60 ring-1 ring-stone-900/5">
+          <label className="mb-2 block text-[10px] font-bold uppercase tracking-widest text-stone-400">Militar (Hierarquia)</label>
           <input
             type="text"
             value={buscaCliente}
             onChange={(e) => { setBuscaCliente(e.target.value); setClienteSelecionado(null); }}
             placeholder="Pesquisar militar..."
-            className="mb-3 w-full rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 outline-none focus:bg-white transition-all"
+            className="mb-4 w-full rounded-lg border border-stone-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-stone-400 transition-all"
           />
-          <div className="max-h-48 overflow-y-auto rounded-2xl border border-stone-100 bg-stone-50">
+          <div className="max-h-40 overflow-y-auto rounded-lg border border-stone-100 bg-stone-50/50">
             {militaresFiltrados.map((c) => (
               <button
                 key={c.id}
                 onClick={() => { setClienteSelecionado(c); setBuscaCliente(`${c.posto_grad} ${c.nome_completo}`) }}
-                className={`block w-full px-4 py-3 text-left text-sm border-b border-stone-100 last:border-0 ${clienteSelecionado?.id === c.id ? 'bg-amber-100 font-bold' : 'hover:bg-white'}`}
+                className={`block w-full px-4 py-2.5 text-left text-xs border-b border-stone-100 last:border-0 ${clienteSelecionado?.id === c.id ? 'bg-stone-950 text-white font-semibold' : 'hover:bg-white'}`}
               >
-                <span className="text-amber-600 mr-2 font-black">{c.posto_grad}</span> {c.nome_completo}
+                <span className={`${clienteSelecionado?.id === c.id ? 'text-stone-300' : 'text-stone-400'} mr-2 font-bold`}>{c.posto_grad}</span> {c.nome_completo}
               </button>
             ))}
             
-            {/* Atalho para cadastro se não encontrar ou lista vazia */}
-            {(militaresFiltrados.length === 0 && buscaCliente.trim() !== '') && (
-              <Link 
-                href="/clientes"
-                className="block w-full px-4 py-4 text-center text-xs font-black uppercase tracking-widest text-amber-600 bg-amber-50 hover:bg-amber-100"
-              >
-                + Cadastrar militar
+            {militaresFiltrados.length === 0 && buscaCliente.trim() !== '' && (
+              <Link href="/clientes" className="block w-full px-4 py-3 text-center text-[10px] font-bold uppercase tracking-widest text-stone-400 hover:text-stone-950 transition-colors">
+                + Cadastrar Militar
               </Link>
             )}
           </div>
-        </div>
+        </section>
 
-        {/* Produtos */}
-        <div className="mb-6 rounded-3xl bg-white p-6 shadow-sm border border-stone-200">
-          <div className="space-y-6">
+        {/* Cardápio */}
+        <section className="mb-6 rounded-xl bg-white p-6 shadow-sm border border-stone-200/60 ring-1 ring-stone-900/5">
+          <div className="space-y-8">
             <div>
-              <p className="mb-2 text-[10px] font-black text-amber-600 uppercase italic">🥪 Alimentos</p>
+              <p className="mb-3 text-[10px] font-bold text-stone-400 uppercase tracking-[0.2em] italic border-b border-stone-100 pb-1">🥪 Alimentos</p>
               <div className="grid grid-cols-2 gap-2">
                 {alimentos.map(p => (
-                  <button key={p.id} onClick={() => adicionarProduto(p)} className="flex justify-between rounded-xl bg-stone-50 p-3 text-xs font-bold active:bg-stone-200 transition-all">
-                    <span>{p.nome}</span>
-                    <span className="text-stone-300">R$ {Number(p.preco_venda).toFixed(2)}</span>
+                  <button key={p.id} onClick={() => adicionarProduto(p)} className="flex justify-between items-center rounded-lg bg-stone-50/50 border border-stone-100 p-3 text-[11px] font-semibold hover:bg-white hover:border-stone-200 transition-all">
+                    <span className="text-stone-700">{p.nome}</span>
+                    <span className="text-stone-400 font-medium">R$ {Number(p.preco_venda).toFixed(2)}</span>
                   </button>
                 ))}
               </div>
             </div>
             <div>
-              <p className="mb-2 text-[10px] font-black text-blue-600 uppercase italic">🥤 Bebidas</p>
+              <p className="mb-3 text-[10px] font-bold text-stone-400 uppercase tracking-[0.2em] italic border-b border-stone-100 pb-1">🥤 Bebidas</p>
               <div className="grid grid-cols-2 gap-2">
                 {bebidas.map(p => (
-                  <button key={p.id} onClick={() => adicionarProduto(p)} className="flex justify-between rounded-xl bg-stone-50 p-3 text-xs font-bold active:bg-stone-200 transition-all">
-                    <span>{p.nome}</span>
-                    <span className="text-stone-300">R$ {Number(p.preco_venda).toFixed(2)}</span>
+                  <button key={p.id} onClick={() => adicionarProduto(p)} className="flex justify-between items-center rounded-lg bg-stone-50/50 border border-stone-100 p-3 text-[11px] font-semibold hover:bg-white hover:border-stone-200 transition-all">
+                    <span className="text-stone-700">{p.nome}</span>
+                    <span className="text-stone-400 font-medium">R$ {Number(p.preco_venda).toFixed(2)}</span>
                   </button>
                 ))}
               </div>
             </div>
           </div>
-        </div>
+        </section>
 
-        {/* Carrinho */}
+        {/* Resumo da Operação */}
         {carrinho.length > 0 && (
-          <div className="mb-6 rounded-3xl bg-white p-6 shadow-sm border border-stone-200">
-            <h2 className="mb-3 text-[10px] font-black uppercase text-stone-400 italic">Carrinho</h2>
-            <div className="space-y-2">
+          <section className="mb-6 rounded-xl bg-stone-950 p-6 text-white shadow-lg shadow-stone-200">
+            <h2 className="mb-4 text-[10px] font-bold uppercase tracking-[0.2em] opacity-50">Resumo da Operação</h2>
+            <div className="space-y-3">
               {carrinho.map(item => (
-                <div key={item.produto.id} className="flex items-center justify-between border-b border-stone-50 pb-2">
-                  <span className="text-sm font-bold">{item.quantidade}x {item.produto.nome}</span>
-                  <button onClick={() => removerUm(item.produto.id)} className="text-red-500 font-bold text-[10px] uppercase">Remover</button>
+                <div key={item.produto.id} className="flex items-center justify-between border-b border-white/10 pb-2">
+                  <span className="text-xs font-medium">{item.quantidade}x {item.produto.nome}</span>
+                  <button onClick={() => removerUm(item.produto.id)} className="text-[10px] font-bold uppercase text-white/40 hover:text-white">Remover</button>
                 </div>
               ))}
-              <div className="pt-2 text-right">
-                <p className="text-2xl font-black text-amber-600 font-mono">R$ {total.toFixed(2)}</p>
+              <div className="pt-4 text-right">
+                <p className="text-xs font-bold uppercase tracking-widest opacity-50 mb-1">Total</p>
+                <p className="text-3xl font-light tracking-tighter italic">R$ {total.toFixed(2)}</p>
               </div>
             </div>
-          </div>
+          </section>
         )}
 
-        <div className="mb-8 rounded-3xl bg-white p-6 shadow-sm border border-stone-200">
-          <div className="grid grid-cols-2 gap-2">
+        <div className="mb-8 rounded-xl bg-white p-6 shadow-sm border border-stone-200/60 ring-1 ring-stone-900/5">
+          <div className="grid grid-cols-4 gap-2">
             {(['pix', 'dinheiro', 'cartao', 'fiado'] as MetodoPagamento[]).map((m) => (
               <button
                 key={m}
                 onClick={() => setMetodo(m)}
-                className={`py-4 rounded-2xl text-[10px] font-black uppercase border transition-all ${metodo === m ? 'bg-stone-800 text-white border-stone-800' : 'bg-white text-stone-400 border-stone-200'}`}
+                className={`py-3 rounded-lg text-[9px] font-bold uppercase tracking-[0.15em] border transition-all ${metodo === m ? 'bg-stone-950 text-white border-stone-950 shadow-sm' : 'bg-white text-stone-400 border-stone-100 hover:bg-stone-50'}`}
               >
                 {m}
               </button>
@@ -263,9 +252,9 @@ export default function Vendas() {
         <button
           onClick={finalizarVenda}
           disabled={salvando || carrinho.length === 0}
-          className={`w-full rounded-2xl py-5 text-lg font-black uppercase tracking-widest text-white shadow-xl transition-all active:scale-95 ${metodo === 'fiado' ? 'bg-amber-600' : 'bg-green-600'}`}
+          className="w-full rounded-lg bg-stone-950 py-5 text-[11px] font-bold uppercase tracking-[0.25em] text-white shadow-xl hover:bg-stone-800 disabled:opacity-50 transition-all active:scale-[0.98]"
         >
-          {salvando ? 'Processando...' : 'Finalizar Venda'}
+          {salvando ? 'Processando...' : 'Confirmar Operação'}
         </button>
       </div>
     </div>

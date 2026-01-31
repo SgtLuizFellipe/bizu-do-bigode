@@ -17,7 +17,6 @@ export default function Login() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
-  // Limpa sessões fantasmas ao carregar a página para evitar erro de Refresh Token
   useEffect(() => {
     supabase.auth.signOut()
   }, [supabase])
@@ -27,9 +26,7 @@ export default function Login() {
     setErro('')
     
     if (!email.trim() || !senha) {
-      const msg = 'Preencha e-mail e senha.'
-      setErro(msg)
-      toast.error(msg)
+      toast.error('Preencha as credenciais.')
       return
     }
 
@@ -42,12 +39,11 @@ export default function Login() {
       })
       
       if (error) {
-        // Se o erro for de sessão, tentamos limpar novamente
         if (error.message.includes('Refresh Token')) {
           await supabase.auth.signOut()
           toast.error('Sessão expirada. Tente novamente.')
         } else {
-          toast.error('E-mail ou senha incorretos.')
+          toast.error('Credenciais inválidas.')
         }
         setErro('Falha na autenticação.')
         setCarregando(false)
@@ -55,28 +51,27 @@ export default function Login() {
       }
 
       if (data?.session) {
-        toast.success('Acesso autorizado!')
-        // window.location.replace força o recarregamento completo e evita bugs de cache no deploy
+        toast.success('Acesso autorizado.')
         window.location.replace('/')
       }
 
     } catch (err) {
-      toast.error('Erro de conexão com o servidor.')
+      toast.error('Erro de conexão.')
       setCarregando(false)
     }
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-stone-100 p-6">
-      <div className="w-full max-w-sm rounded-3xl bg-white p-8 shadow-sm border border-stone-200">
-        <div className="mb-8 text-center">
-          <h1 className="text-2xl font-black text-stone-800 italic">BIZU DO BIGODE</h1>
-          <p className="text-sm font-medium text-stone-400 uppercase tracking-widest mt-1">Acesso Restrito</p>
-        </div>
+    <div className="flex min-h-screen items-center justify-center bg-stone-50 p-6">
+      <div className="w-full max-w-sm rounded-xl bg-white p-10 shadow-sm border border-stone-200/60 ring-1 ring-stone-900/5">
+        <header className="mb-10 text-center">
+          <h1 className="text-2xl font-medium tracking-tight text-stone-950 italic">BIZU DO BIGODE</h1>
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-stone-400 mt-2">Sistema de Gestão</p>
+        </header>
 
-        <form onSubmit={entrar} className="space-y-5">
-          <div>
-            <label htmlFor="email" className="block text-xs font-bold uppercase tracking-wider text-stone-400 mb-2 ml-1">
+        <form onSubmit={entrar} className="space-y-6">
+          <div className="space-y-1.5">
+            <label htmlFor="email" className="block text-[10px] font-bold uppercase tracking-widest text-stone-400 ml-1">
               E-mail
             </label>
             <input
@@ -84,14 +79,14 @@ export default function Login() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="seu@email.com"
-              className="w-full rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-stone-800 placeholder-stone-400 focus:bg-white outline-none transition-all"
+              placeholder="admin@bizu.com"
+              className="w-full rounded-lg border border-stone-200 bg-white px-4 py-3 text-sm text-stone-800 placeholder-stone-300 outline-none focus:border-stone-400 focus:ring-1 focus:ring-stone-900/5 transition-all"
               required
             />
           </div>
 
-          <div>
-            <label htmlFor="senha" className="block text-xs font-bold uppercase tracking-wider text-stone-400 mb-2 ml-1">
+          <div className="space-y-1.5">
+            <label htmlFor="senha" className="block text-[10px] font-bold uppercase tracking-widest text-stone-400 ml-1">
               Senha
             </label>
             <input
@@ -100,7 +95,7 @@ export default function Login() {
               value={senha}
               onChange={(e) => setSenha(e.target.value)}
               placeholder="••••••••"
-              className="w-full rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-stone-800 placeholder-stone-400 focus:bg-white outline-none transition-all"
+              className="w-full rounded-lg border border-stone-200 bg-white px-4 py-3 text-sm text-stone-800 placeholder-stone-300 outline-none focus:border-stone-400 focus:ring-1 focus:ring-stone-900/5 transition-all"
               required
             />
           </div>
@@ -108,11 +103,15 @@ export default function Login() {
           <button
             type="submit"
             disabled={carregando}
-            className="w-full rounded-2xl bg-stone-800 py-4 font-bold text-white shadow-lg hover:bg-stone-900 disabled:opacity-50 transition-all active:scale-[0.98]"
+            className="w-full rounded-lg bg-stone-950 py-4 text-xs font-bold uppercase tracking-widest text-white shadow-sm hover:bg-stone-800 disabled:opacity-50 transition-all active:scale-[0.98] mt-2"
           >
-            {carregando ? 'Autenticando...' : 'Entrar no Sistema'}
+            {carregando ? 'Verificando...' : 'Entrar no Sistema'}
           </button>
         </form>
+
+        <footer className="mt-10 text-center">
+          <p className="text-[9px] font-medium text-stone-300 uppercase tracking-tighter">Terminal Seguro • v2.1</p>
+        </footer>
       </div>
     </div>
   )

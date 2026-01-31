@@ -13,7 +13,7 @@ type Produto = {
   categoria: string
 }
 
-const ATALHOS = ['Sanduíche de Frango', 'Calabresa', 'Salame', 'Peito de Peru', 'Refrigerante', 'Suco', 'Energético']
+const ATALHOS = ['Frango', 'Calabresa', 'Salame', 'Peito de Peru', 'Refrigerante', 'Suco', 'Energético']
 
 export default function Produtos() {
   const [nome, setNome] = useState('')
@@ -34,7 +34,7 @@ export default function Produtos() {
 
   async function salvar() {
     if (!nome.trim()) {
-      toast.error('Preencha o nome do produto.')
+      toast.error('Informe o nome do item.')
       return
     }
     
@@ -54,23 +54,23 @@ export default function Produtos() {
     setSalvando(false)
     
     if (error) {
-      toast.error('Erro ao salvar no banco de dados.')
+      toast.error('Erro ao processar operação.')
       return
     }
 
-    toast.success(idEdicao ? 'Produto atualizado!' : 'Produto adicionado!')
+    toast.success(idEdicao ? 'Produto atualizado.' : 'Produto catalogado.')
     limparFormulario()
     carregarProdutos()
   }
 
   async function excluirProduto(id: string) {
-    if (!confirm('Deseja realmente remover este item?')) return
+    if (!confirm('Remover este item do inventário?')) return
     const { error } = await supabase.from('produtos').delete().eq('id', id)
     if (error) {
-      toast.error('Erro ao excluir.')
+      toast.error('Erro na exclusão.')
       return
     }
-    toast.success('Produto removido.')
+    toast.success('Item removido.')
     carregarProdutos()
   }
 
@@ -92,20 +92,23 @@ export default function Produtos() {
   const bebidas = listaProdutos.filter(p => p.categoria === 'bebida')
 
   return (
-    <div className="min-h-screen bg-stone-100 p-6 pb-24 text-stone-800">
+    <div className="min-h-screen bg-stone-50 p-6 pb-24 text-stone-900">
       <div className="mx-auto max-w-md">
         
-        <div className="mb-8 rounded-3xl bg-white p-8 shadow-sm border border-stone-200">
-          <h1 className="mb-6 text-xl font-bold text-center italic">
-            {idEdicao ? 'Editar Produto' : 'Cadastro de Estoque'}
-          </h1>
+        <div className="mb-8 rounded-xl bg-white p-8 shadow-sm border border-stone-200/60 ring-1 ring-stone-900/5">
+          <header className="mb-8 text-center">
+            <h1 className="text-xl font-medium tracking-tight text-stone-950 italic">
+              {idEdicao ? 'Editar Registro' : 'Cadastro de Inventário'}
+            </h1>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400 mt-1">Gestão de Mercadorias</p>
+          </header>
 
           {!idEdicao && (
             <div className="mb-8">
-              <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-stone-400">Atalhos</p>
+              <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-stone-400 ml-1">Atalhos Rápidos</p>
               <div className="flex flex-wrap gap-2">
                 {ATALHOS.map((item) => (
-                  <button key={item} type="button" onClick={() => setNome(item)} className="rounded-xl bg-stone-100 px-3 py-2 text-[10px] font-black text-stone-600 hover:bg-stone-800 hover:text-white transition-all">
+                  <button key={item} type="button" onClick={() => setNome(item)} className="rounded-lg bg-stone-50 px-3 py-1.5 text-[10px] font-bold text-stone-600 hover:bg-stone-950 hover:text-white border border-stone-200/50 transition-all">
                     {item}
                   </button>
                 ))}
@@ -113,48 +116,48 @@ export default function Produtos() {
             </div>
           )}
 
-          <div className="space-y-4">
+          <div className="space-y-5">
             <div>
-              <label className="block text-[10px] font-black uppercase text-stone-400 mb-1 ml-1">Nome</label>
-              <input type="text" value={nome} onChange={(e) => setNome(e.target.value)} className="w-full rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 outline-none focus:bg-white transition-all" />
+              <label className="block text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1.5 ml-1">Descrição do Produto</label>
+              <input type="text" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex: Sanduíche de Frango" className="w-full rounded-lg border border-stone-200 bg-white px-4 py-2.5 text-sm outline-none focus:border-stone-400 transition-all" />
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-3 gap-3">
               <div>
-                <label className="block text-[10px] font-black uppercase text-stone-400 mb-1 ml-1">Custo</label>
-                <input type="number" value={custo || ''} onChange={(e) => setCusto(Number(e.target.value))} className="w-full rounded-2xl border border-stone-200 bg-stone-50 px-3 py-3 outline-none focus:bg-white transition-all" />
+                <label className="block text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1.5 ml-1">Custo</label>
+                <input type="number" value={custo || ''} onChange={(e) => setCusto(Number(e.target.value))} className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-stone-400 transition-all" />
               </div>
               <div>
-                <label className="block text-[10px] font-black uppercase text-stone-400 mb-1 ml-1">Venda</label>
-                <input type="number" value={venda || ''} onChange={(e) => setVenda(Number(e.target.value))} className="w-full rounded-2xl border border-stone-200 bg-stone-50 px-3 py-3 outline-none focus:bg-white transition-all" />
+                <label className="block text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1.5 ml-1">Venda</label>
+                <input type="number" value={venda || ''} onChange={(e) => setVenda(Number(e.target.value))} className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-stone-400 transition-all" />
               </div>
               <div>
-                <label className="block text-[10px] font-black uppercase text-stone-400 mb-1 ml-1">Qtd Inicial</label>
-                <input type="number" value={estoque || ''} onChange={(e) => setEstoque(Number(e.target.value))} className="w-full rounded-2xl border border-stone-200 bg-stone-50 px-3 py-3 outline-none focus:bg-white transition-all" />
+                <label className="block text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-1.5 ml-1">Estoque</label>
+                <input type="number" value={estoque || ''} onChange={(e) => setEstoque(Number(e.target.value))} className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-stone-400 transition-all" />
               </div>
             </div>
 
             <div>
-              <label className="block text-[10px] font-black uppercase text-stone-400 mb-1 ml-1">Categoria</label>
+              <label className="block text-[10px] font-bold uppercase tracking-widest text-stone-400 mb-2 ml-1">Categoria de Item</label>
               <div className="flex gap-2">
                 {['comida', 'bebida'].map(cat => (
-                  <button key={cat} type="button" onClick={() => setCategoria(cat)} className={`flex-1 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest border transition-all ${categoria === cat ? 'bg-stone-800 text-white' : 'bg-stone-50 text-stone-400'}`}>
+                  <button key={cat} type="button" onClick={() => setCategoria(cat)} className={`flex-1 py-2.5 rounded-lg text-[10px] font-bold uppercase tracking-[0.15em] border transition-all ${categoria === cat ? 'bg-stone-950 text-white border-stone-950' : 'bg-white text-stone-400 border-stone-200'}`}>
                     {cat}
                   </button>
                 ))}
               </div>
             </div>
 
-            <button onClick={salvar} disabled={salvando} className="w-full rounded-2xl bg-amber-600 py-4 font-black uppercase tracking-widest text-white shadow-xl active:scale-95 transition-all mt-2">
-              {salvando ? 'Processando...' : idEdicao ? 'Salvar Alterações' : 'Adicionar ao Estoque'}
+            <button onClick={salvar} disabled={salvando} className="w-full rounded-lg bg-stone-950 py-4 text-[11px] font-bold uppercase tracking-[0.2em] text-white shadow-sm hover:bg-stone-800 disabled:opacity-50 transition-all active:scale-[0.98] mt-2">
+              {salvando ? 'Processando...' : idEdicao ? 'Atualizar Registro' : 'Catalogar no Estoque'}
             </button>
-            {idEdicao && <button onClick={limparFormulario} className="w-full text-[10px] font-black text-stone-400 uppercase">Cancelar</button>}
+            {idEdicao && <button onClick={limparFormulario} className="w-full text-[10px] font-bold text-stone-400 uppercase tracking-widest py-2">Cancelar Operação</button>}
           </div>
         </div>
 
-        <div className="space-y-4">
-          <SecaoProdutos titulo="🥪 Alimentos" cor="text-amber-600" itens={alimentos} onEdit={editarProduto} onDelete={excluirProduto} />
-          <SecaoProdutos titulo="🥤 Bebidas" cor="text-blue-600" itens={bebidas} onEdit={editarProduto} onDelete={excluirProduto} />
+        <div className="space-y-6">
+          <SecaoProdutos titulo="🥪 Alimentos" cor="text-stone-950" itens={alimentos} onEdit={editarProduto} onDelete={excluirProduto} />
+          <SecaoProdutos titulo="🥤 Bebidas" cor="text-stone-950" itens={bebidas} onEdit={editarProduto} onDelete={excluirProduto} />
         </div>
       </div>
     </div>
@@ -163,23 +166,27 @@ export default function Produtos() {
 
 function SecaoProdutos({ titulo, cor, itens, onEdit, onDelete }: any) {
   return (
-    <div className="rounded-3xl bg-white p-6 shadow-sm border border-stone-200">
-      <h2 className={`mb-4 text-[10px] font-black uppercase tracking-widest ${cor} italic`}>{titulo} ({itens.length})</h2>
-      <div className="space-y-2">
+    <div className="rounded-xl bg-white p-6 border border-stone-200/60 shadow-sm ring-1 ring-stone-900/5">
+      <h2 className={`mb-5 text-[10px] font-bold uppercase tracking-[0.2em] ${cor} italic opacity-60`}>{titulo} ({itens.length})</h2>
+      <div className="space-y-3">
         {itens.map((p: any) => (
-          <div key={p.id} className="flex items-center justify-between p-4 bg-stone-50 rounded-2xl border border-stone-100">
+          <div key={p.id} className="flex items-center justify-between p-4 bg-stone-50/50 rounded-lg border border-stone-100">
             <div>
-              <span className="text-sm font-bold text-stone-700 block">{p.nome}</span>
-              <span className={`text-[10px] font-black uppercase ${p.estoque < 5 ? 'text-red-500' : 'text-stone-400'}`}>
-                Estoque: {p.estoque} un.
-              </span>
+              <span className="text-sm font-semibold text-stone-900 block">{p.nome}</span>
+              <div className="flex items-center gap-2 mt-1">
+                <div className={`h-1.5 w-1.5 rounded-full ${p.estoque < 5 ? 'bg-red-500' : 'bg-stone-300'}`} />
+                <span className={`text-[10px] font-medium uppercase tracking-tight ${p.estoque < 5 ? 'text-red-500 font-bold' : 'text-stone-400'}`}>
+                  Qtd: {p.estoque} un.
+                </span>
+              </div>
             </div>
-            <div className="flex gap-3">
-              <button onClick={() => onEdit(p)} className="text-[10px] font-black uppercase text-blue-500">Editar</button>
-              <button onClick={() => onDelete(p.id)} className="text-[10px] font-black uppercase text-red-500">Excluir</button>
+            <div className="flex gap-4">
+              <button onClick={() => onEdit(p)} className="text-[10px] font-bold uppercase tracking-widest text-stone-400 hover:text-stone-950 transition-colors">Editar</button>
+              <button onClick={() => onDelete(p.id)} className="text-[10px] font-bold uppercase tracking-widest text-red-400 hover:text-red-600 transition-colors">Remover</button>
             </div>
           </div>
         ))}
+        {itens.length === 0 && <p className="text-center py-4 text-[10px] font-medium text-stone-300 uppercase italic">Nenhum item catalogado</p>}
       </div>
     </div>
   )
