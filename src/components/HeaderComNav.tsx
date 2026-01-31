@@ -17,6 +17,7 @@ export default function HeaderComNav() {
     { name: 'Cobranças', href: '/cobrancas' },
     { name: 'Extrato', href: '/extrato' },
     { name: 'Análise', href: '/analise' },
+    { name: 'Fechamento', href: 'fechamento' }
   ]
 
   return (
