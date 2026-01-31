@@ -18,8 +18,13 @@ type ItemVenda = {
   produto_id: string
   quantidade: number
   preco_unitario: number
-  nome_produto?: string
   custo_produto?: number
+}
+
+type Baixa = {
+  id: string
+  custo_total: number
+  data_baixa: string
 }
 
 type Produto = {
@@ -33,6 +38,7 @@ type Produto = {
 export default function Analise() {
   const [vendas, setVendas] = useState<Venda[]>([])
   const [itensVenda, setItensVenda] = useState<ItemVenda[]>([])
+  const [baixas, setBaixas] = useState<Baixa[]>([])
   const [produtos, setProdutos] = useState<Produto[]>([])
   const [periodo, setPeriodo] = useState<Periodo>('mes')
   const [carregando, setCarregando] = useState(true)
@@ -41,10 +47,11 @@ export default function Analise() {
     async function carregar() {
       setCarregando(true)
       try {
-        const [resVendas, resItens, resProdutos] = await Promise.all([
+        const [resVendas, resItens, resProdutos, resBaixas] = await Promise.all([
           supabase.from('vendas').select('id, valor_total, pago, data_venda'),
           supabase.from('itens_venda').select('venda_id, produto_id, quantidade, preco_unitario'),
-          supabase.from('produtos').select('id, nome, preco_custo, preco_venda, estoque')
+          supabase.from('produtos').select('id, nome, preco_custo, preco_venda, estoque'),
+          supabase.from('baixas').select('id, custo_total, data_baixa')
         ])
         
         if (resVendas.error || resItens.error || resProdutos.error) {
@@ -57,6 +64,7 @@ export default function Analise() {
 
         setVendas(resVendas.data || [])
         setProdutos(resProdutos.data || [])
+        setBaixas(resBaixas.data || [])
         
         const itensFormatados = (resItens.data || []).map(item => ({
           ...item,
@@ -76,27 +84,35 @@ export default function Analise() {
 
   const stats = useMemo(() => {
     const hoje = new Date()
-    const vendasFiltradas = vendas.filter((v) => {
-      if (!v.data_venda) return false
-      const dataV = new Date(v.data_venda)
+    
+    const filtrarPorData = (dataStr?: string) => {
+      if (!dataStr) return false
+      const dataV = new Date(dataStr)
       return periodo === 'hoje' 
         ? dataV.toDateString() === hoje.toDateString()
         : dataV.getMonth() === hoje.getMonth() && dataV.getFullYear() === hoje.getFullYear()
-    })
+    }
 
-    const idsVendasFiltradas = new Set(vendasFiltradas.map((v) => v.id))
+    const vendasFiltradas = vendas.filter(v => filtrarPorData(v.data_venda))
+    const baixasFiltradas = baixas.filter(b => filtrarPorData(b.data_baixa))
+
     const bruto = vendasFiltradas.reduce((s, v) => s + (Number(v.valor_total) || 0), 0)
     const fiado = vendasFiltradas.filter((v) => !v.pago).reduce((s, v) => s + (Number(v.valor_total) || 0), 0)
+    const perdasTotal = baixasFiltradas.reduce((s, b) => s + (Number(b.custo_total) || 0), 0)
 
+    const idsVendasFiltradas = new Set(vendasFiltradas.map((v) => v.id))
     const itensFiltrados = itensVenda.filter((i) => idsVendasFiltradas.has(i.venda_id))
     
-    const liquido = itensFiltrados.reduce((s, i) => {
+    // Lucro Líquido das vendas menos as perdas (consumo/avaria)
+    const lucroVendas = itensFiltrados.reduce((s, i) => {
       return s + (Number(i.quantidade) * (Number(i.preco_unitario) - Number(i.custo_produto)))
     }, 0)
 
+    const liquidoReal = lucroVendas - perdasTotal
+
     const porProduto = new Map<string, number>()
     for (const i of itensFiltrados) {
-      const nome = i.nome_produto ?? 'Produto'
+      const nome = (i as any).nome_produto ?? 'Produto'
       porProduto.set(nome, (porProduto.get(nome) ?? 0) + Number(i.quantidade))
     }
     
@@ -107,8 +123,8 @@ export default function Analise() {
     const investimentoTotal = produtos.reduce((s, p) => s + (Number(p.estoque) * Number(p.preco_custo)), 0)
     const lucroPotencial = produtos.reduce((s, p) => s + (Number(p.estoque) * (Number(p.preco_venda) - Number(p.preco_custo))), 0)
 
-    return { bruto, liquido, fiado, rank, investimentoTotal, lucroPotencial }
-  }, [vendas, itensVenda, produtos, periodo])
+    return { bruto, liquido: liquidoReal, fiado, perdasTotal, rank, investimentoTotal, lucroPotencial }
+  }, [vendas, itensVenda, produtos, baixas, periodo])
 
   return (
     <div className="min-h-screen bg-stone-50 p-6 pb-20 text-stone-900">
@@ -128,22 +144,19 @@ export default function Analise() {
 
         {carregando ? (
           <div className="animate-pulse space-y-6">
-            <div className="grid grid-cols-3 gap-4"><div className="h-24 rounded-xl bg-white" /><div className="h-24 rounded-xl bg-white" /><div className="h-24 rounded-xl bg-white" /></div>
-            <div className="h-40 rounded-xl bg-white" />
+            <div className="grid grid-cols-3 gap-4"><div className="h-24 rounded-xl bg-white" /></div>
           </div>
         ) : (
           <div className="space-y-6">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <Card title="Receita Bruta" value={stats.bruto} color="text-stone-950" />
+              <Card title="Prejuízo / Baixas" value={stats.perdasTotal} color="text-red-600" />
               <Card title="Lucro Real" value={stats.liquido} color="text-stone-950" />
-              <Card title="Pendente (Fiado)" value={stats.fiado} color="text-red-600" />
             </div>
 
-            {/* Patrimônio com Design Clean */}
-            <div className="rounded-xl bg-stone-950 p-6 text-white shadow-lg shadow-stone-200/50">
+            <div className="rounded-xl bg-stone-950 p-6 text-white shadow-lg">
               <header className="mb-6 flex items-center justify-between border-b border-white/10 pb-3">
                 <h2 className="text-[10px] font-bold uppercase tracking-[0.2em] opacity-50 italic">Patrimônio em Gôndola</h2>
-                <span className="text-[9px] font-medium px-2 py-0.5 rounded border border-white/20 uppercase">Ativo Físico</span>
               </header>
               <div className="grid grid-cols-2 gap-8">
                 <div>
@@ -151,8 +164,8 @@ export default function Analise() {
                   <p className="text-2xl font-light tracking-tighter">R$ {stats.investimentoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                 </div>
                 <div className="text-right">
-                  <p className="text-[9px] font-bold uppercase tracking-widest opacity-40 mb-1">Projeção de Lucro</p>
-                  <p className="text-2xl font-light tracking-tighter italic text-stone-300">R$ {stats.lucroPotencial.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                  <p className="text-[9px] font-bold uppercase tracking-widest opacity-40 mb-1">Fiado Pendente</p>
+                  <p className="text-2xl font-light tracking-tighter text-red-400 italic">R$ {stats.fiado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                 </div>
               </div>
             </div>
@@ -169,7 +182,6 @@ export default function Analise() {
                     <span className="text-xs font-bold text-stone-950">{item.quantidade} <span className="text-[10px] font-normal text-stone-400 uppercase ml-0.5">un</span></span>
                   </div>
                 ))}
-                {stats.rank.length === 0 && <p className="text-center py-6 text-[10px] font-medium text-stone-300 uppercase italic">Nenhum dado no período</p>}
               </div>
             </div>
           </div>

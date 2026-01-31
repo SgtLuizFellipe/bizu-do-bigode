@@ -12,12 +12,12 @@ export default function HeaderComNav() {
   const navLinks = [
     { name: 'Início', href: '/' },
     { name: 'Vendas', href: '/vendas' },
-    { name: 'Produtos', href: '/produtos' },
+    { name: 'Estoque', href: '/produtos' },
     { name: 'Clientes', href: '/clientes' },
+    { name: 'Desperdício', href: '/baixas' },
     { name: 'Cobranças', href: '/cobrancas' },
     { name: 'Extrato', href: '/extrato' },
     { name: 'Análise', href: '/analise' },
-    { name: 'Fechamento', href: 'fechamento' }
   ]
 
   return (
