@@ -1,9 +1,9 @@
 'use client'
 
 import { createBrowserClient } from '@supabase/ssr'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { toast } from 'sonner' // Importação necessária
+import { toast } from 'sonner'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -16,6 +16,11 @@ export default function Login() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
+
+  // Limpa sessões fantasmas ao carregar a página para evitar erro de Refresh Token
+  useEffect(() => {
+    supabase.auth.signOut()
+  }, [supabase])
 
   async function entrar(e: React.FormEvent) {
     e.preventDefault()
@@ -31,31 +36,32 @@ export default function Login() {
     setCarregando(true)
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({ 
+      const { error, data } = await supabase.auth.signInWithPassword({ 
         email: email.trim(), 
         password: senha 
       })
       
       if (error) {
-        const msg = 'E-mail ou senha incorretos.'
-        setErro(msg)
-        toast.error(msg)
+        // Se o erro for de sessão, tentamos limpar novamente
+        if (error.message.includes('Refresh Token')) {
+          await supabase.auth.signOut()
+          toast.error('Sessão expirada. Tente novamente.')
+        } else {
+          toast.error('E-mail ou senha incorretos.')
+        }
+        setErro('Falha na autenticação.')
         setCarregando(false)
         return
       }
 
-      toast.success('Acesso autorizado! Entrando...')
-      
-      router.refresh()
-      
-      setTimeout(() => {
-        router.push('/')
-      }, 500)
+      if (data?.session) {
+        toast.success('Acesso autorizado!')
+        // window.location.replace força o recarregamento completo e evita bugs de cache no deploy
+        window.location.replace('/')
+      }
 
     } catch (err) {
-      const msg = 'Erro ao conectar com o servidor.'
-      setErro(msg)
-      toast.error(msg)
+      toast.error('Erro de conexão com o servidor.')
       setCarregando(false)
     }
   }
@@ -79,7 +85,8 @@ export default function Login() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="seu@email.com"
-              className="w-full rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-stone-800 placeholder-stone-400 focus:bg-white focus:ring-2 focus:ring-stone-200 outline-none transition-all"
+              className="w-full rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-stone-800 placeholder-stone-400 focus:bg-white outline-none transition-all"
+              required
             />
           </div>
 
@@ -93,15 +100,10 @@ export default function Login() {
               value={senha}
               onChange={(e) => setSenha(e.target.value)}
               placeholder="••••••••"
-              className="w-full rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-stone-800 placeholder-stone-400 focus:bg-white focus:ring-2 focus:ring-stone-200 outline-none transition-all"
+              className="w-full rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-stone-800 placeholder-stone-400 focus:bg-white outline-none transition-all"
+              required
             />
           </div>
-
-          {erro && (
-            <div className="rounded-xl bg-red-50 p-3">
-              <p className="text-center text-xs font-bold text-red-600">{erro}</p>
-            </div>
-          )}
 
           <button
             type="submit"
