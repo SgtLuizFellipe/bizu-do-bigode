@@ -1,7 +1,7 @@
 'use client'
 
 import { supabase } from '../../lib/supabase'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { toast } from 'sonner' 
 
 type TipoCliente = 'militar' | 'civil' | null
@@ -16,6 +16,10 @@ export default function Clientes() {
   const [posto, setPosto] = useState('EV')
   const [companhia, setCompanhia] = useState('1ª Cia')
   const [salvando, setSalvando] = useState(false)
+  const [clientes, setClientes] = useState<any[]>([])
+  const [editando, setEditando] = useState<any | null>(null)
+  const [editNome, setEditNome] = useState('')
+  const [editTelefone, setEditTelefone] = useState('')
 
   async function salvar() {
     if (!nome.trim() || !telefone.trim()) {
@@ -45,6 +49,40 @@ export default function Clientes() {
 
     toast.success('Registro concluído.') 
     setNome(''); setTelefone(''); setPosto('EV'); setCompanhia('1ª Cia'); setTipo(null);
+  }
+
+  useEffect(() => {
+    async function carregar() {
+      const { data } = await supabase.from('clientes').select('*').order('nome_completo')
+      if (data) setClientes(data as any[])
+    }
+    carregar()
+  }, [])
+
+  async function abrirEdicao(c: any) {
+    setEditando(c)
+    setEditNome(c.nome_completo || '')
+    setEditTelefone(c.telefone || '')
+  }
+
+  async function salvarEdicao() {
+    if (!editNome.trim() || !editTelefone.trim()) { toast.error('Preencha os campos.'); return }
+    const id = editando?.id
+    if (!id) return
+    const { error } = await supabase.from('clientes').update({ nome_completo: editNome.trim(), telefone: editTelefone.trim() }).eq('id', id)
+    if (error) { toast.error('Erro ao atualizar'); return }
+    setClientes(prev => prev.map(p => p.id === id ? { ...p, nome_completo: editNome.trim(), telefone: editTelefone.trim() } : p))
+    toast.success('Contato atualizado')
+    setEditando(null)
+  }
+
+  async function excluirContato(id: string) {
+    const ok = confirm('Excluir contato? Esta ação não pode ser desfeita.')
+    if (!ok) return
+    const { error } = await supabase.from('clientes').delete().eq('id', id)
+    if (error) { toast.error('Erro ao excluir'); return }
+    setClientes(prev => prev.filter(p => p.id !== id))
+    toast.success('Contato excluído')
   }
 
   return (
@@ -145,6 +183,52 @@ export default function Clientes() {
           </div>
         )}
       </div>
+      {clientes.length > 0 && (
+        <div className="mx-auto max-w-md rounded-xl bg-white p-6 shadow-sm border border-stone-200/60 ring-1 ring-stone-900/5 mt-6">
+          <header className="mb-4">
+            <h2 className="text-sm font-medium tracking-tight text-stone-900 italic">Contatos Cadastrados</h2>
+            <p className="text-[10px] text-stone-400 mt-1">Clique em editar para alterar nome ou telefone</p>
+          </header>
+          <div className="space-y-2 max-h-64 overflow-y-auto">
+            {clientes.map(c => (
+              <div key={c.id} className="flex items-center justify-between p-3 bg-stone-50 rounded-xl border border-stone-100">
+                <div>
+                  <p className="text-[11px] font-medium">{c.nome_completo}</p>
+                  <p className="text-[10px] text-stone-400">{c.telefone || '—'}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => abrirEdicao(c)} className="text-[10px] px-3 py-2 bg-stone-950 text-white rounded-lg">Editar</button>
+                  <button onClick={() => excluirContato(c.id)} className="text-[10px] px-3 py-2 bg-white border border-stone-200 text-stone-600 rounded-lg">Excluir</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {editando && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/40 backdrop-blur-sm p-6">
+          <div className="w-full max-w-sm bg-white p-6 rounded-2xl shadow-2xl">
+            <header className="mb-4">
+              <h3 className="text-sm text-stone-900">Editar Contato</h3>
+            </header>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-[10px] text-stone-400 uppercase mb-1">Nome Completo</label>
+                <input value={editNome} onChange={(e) => setEditNome(e.target.value)} className="w-full rounded-lg border border-stone-200 px-3 py-2" />
+              </div>
+              <div>
+                <label className="block text-[10px] text-stone-400 uppercase mb-1">WhatsApp</label>
+                <input value={editTelefone} onChange={(e) => setEditTelefone(e.target.value)} className="w-full rounded-lg border border-stone-200 px-3 py-2" />
+              </div>
+            </div>
+            <div className="mt-4 flex gap-2">
+              <button onClick={() => setEditando(null)} className="flex-1 p-3 bg-stone-100 text-stone-500 rounded-xl">Cancelar</button>
+              <button onClick={salvarEdicao} className="flex-1 p-3 bg-stone-950 text-white rounded-xl">Salvar</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

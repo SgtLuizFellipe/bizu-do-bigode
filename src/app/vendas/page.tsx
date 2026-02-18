@@ -21,9 +21,9 @@ const ORDEM_HIERARQUICA: Record<string, number> = { 'Ten': 1, 'Sgt': 2, 'Cb': 3,
 
 const COMBOS_PROMO: ComboConfig[] = [
   { id: 'G', label: 'Combo G', preco: 12.00, desc: '1 Pão + 1 Refri', precisa: ['Pão', 'Refrigerante'] },
-  { id: 'E', label: 'Combo E', preco: 16.00, desc: '1 Pão + 1 Ener.', precisa: ['Pão', 'Energético'] },
-  { id: 'GB', label: 'Combo GB', preco: 26.00, desc: '1 Pão + 1 Refri + 1 Bolo', precisa: ['Pão', 'Refrigerante', 'Bolo'] },
-  { id: 'EB', label: 'Combo EB', preco: 28.00, desc: '1 Pão + 1 Ener. + 1 Bolo', precisa: ['Pão', 'Energético', 'Bolo'] },
+  { id: 'E', label: 'Combo E', preco: 17.50, desc: '1 Pão + 1 Ener.', precisa: ['Pão', 'Energético'] },
+  { id: 'GB', label: 'Combo GB', preco: 28.00, desc: '1 Pão + 1 Refri + 1 Bolo', precisa: ['Pão', 'Refrigerante', 'Bolo'] },
+  { id: 'EB', label: 'Combo EB', preco: 30.00, desc: '1 Pão + 1 Ener. + 1 Bolo', precisa: ['Pão', 'Energético', 'Bolo'] },
 ]
 
 export default function Vendas() {
@@ -64,20 +64,9 @@ export default function Vendas() {
   }, [clientes, buscaCliente])
 
   const { subtotalGeral, descontoCalculado } = useMemo(() => {
-    let subNormal = 0
-    let subPromo = 0
-    carrinho.forEach(i => {
-      const preco = Number(i.produto.preco_venda) || 0
-      if (i.noCombo) subPromo += preco
-      else subNormal += preco
-    })
-    const count = carrinho.filter(i => i.noCombo).length;
-    const conf = COMBOS_PROMO.find(c => c.precisa.length === count);
-    const precoAlvoCombo = conf ? conf.preco : subPromo;
-    return { 
-      subtotalGeral: subNormal + subPromo, 
-      descontoCalculado: Math.max(0, subPromo - precoAlvoCombo) 
-    }
+    const subtotal = carrinho.reduce((s, i) => s + (Number(i.produto.preco_venda) || 0) * (i.quantidade || 1), 0)
+    // Não aplicar desconto automático em combos: combos têm preço fixo quando adicionados.
+    return { subtotalGeral: subtotal, descontoCalculado: 0 }
   }, [carrinho])
 
   const totalComDesconto = subtotalGeral - (descontoManual ?? descontoCalculado)
@@ -106,8 +95,15 @@ export default function Vendas() {
     if (!modalCombo) return;
     const faltam = modalCombo.precisa.filter(tipo => !selecaoCombo[tipo]);
     if (faltam.length > 0) return toast.error('Selecione todos os sabores.');
-    const itens = Object.values(selecaoCombo).map(p => ({ produto: p, quantidade: 1, noCombo: true }));
-    setCarrinho([...carrinho, ...itens]);
+    // Adiciona um único item representando o combo com preço fixo do combo
+    const comboProduto: Produto = {
+      id: `combo-${modalCombo.id}-${Date.now()}`,
+      nome: `${modalCombo.label} — ${modalCombo.desc}`,
+      preco_venda: modalCombo.preco,
+      categoria: 'combo',
+      localizacao: 'Combo'
+    }
+    setCarrinho([...carrinho, { produto: comboProduto, quantidade: 1, noCombo: true }]);
     setModalCombo(null);
     setSelecaoCombo({});
     setDescontoManual(null); // Reseta para recalcular automático
@@ -199,7 +195,7 @@ export default function Vendas() {
                    <span className="text-lg">- R$</span>
                    <input 
                      type="number" 
-                     value={descontoManual ?? descontoCalculado.toFixed(2)} 
+                     value={descontoManual ?? descontoCalculado}
                      onChange={(e) => setDescontoManual(Number(e.target.value))}
                      className="bg-transparent text-lg border-b border-white/20 outline-none w-20 text-white"
                    />
