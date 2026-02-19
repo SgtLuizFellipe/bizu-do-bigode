@@ -1,9 +1,9 @@
 'use client'
 
-import { createBrowserClient } from '@supabase/ssr'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import { supabase } from '../../lib/supabase'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -11,15 +11,10 @@ export default function Login() {
   const [erro, setErro] = useState('')
   const [carregando, setCarregando] = useState(false)
   const router = useRouter()
-  
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
 
   useEffect(() => {
     supabase.auth.signOut()
-  }, [supabase])
+  }, [])
 
   async function entrar(e: React.FormEvent) {
     e.preventDefault()
