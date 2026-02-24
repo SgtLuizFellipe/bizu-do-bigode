@@ -12,7 +12,7 @@ type Periodo = 'hoje' | 'mes'
 const CATEGORIAS_FILTRO = ['Sanduíches', 'Bolos', 'Refrigerantes', 'Energéticos']
 
 type Venda = { id: string; valor_total: number; pago: boolean; data_venda?: string }
-type ItemVenda = { venda_id: string; produto_id: string; quantidade: number; preco_unitario: number; custo_produto?: number; categoria_pai?: string }
+type ItemVenda = { venda_id: string; produto_id: string; quantidade: number; preco_unitario: number; custo_produto?: number; categoria_pai?: string; nome_produto?: string }
 type Baixa = { id: string; custo_total: number; data_baixa: string }
 type Produto = { id: string; nome: string; preco_custo: number; preco_venda: number; estoque: number; categoria_pai: string }
 
@@ -31,21 +31,19 @@ export default function Analise() {
       try {
         const [resVendas, resItens, resProdutos, resBaixas] = await Promise.all([
           supabase.from('vendas').select('id, valor_total, pago, data_venda'),
-          supabase.from('itens_venda').select('venda_id, produto_id, quantidade, preco_unitario'),
+          supabase.from('itens_venda').select('venda_id, produto_id, quantidade, preco_unitario, produtos(nome, preco_custo, categoria_pai)'),
           supabase.from('produtos').select('*'),
           supabase.from('baixas').select('id, custo_total, data_baixa')
         ])
-        
-        const produtosMap = new Map()
-        resProdutos.data?.forEach(p => produtosMap.set(p.id, p))
 
         const itensFormatados = (resItens.data || []).map(item => {
-          const pInfo = produtosMap.get(item.produto_id)
+          const pInfo = Array.isArray((item as any).produtos) ? (item as any).produtos[0] : (item as any).produtos
+          const nomeFallback = String(item.produto_id || '').startsWith('combo-') ? 'Combo Promocional' : 'Produto'
           return {
             ...item,
-            nome_produto: pInfo?.nome || 'Produto',
+            nome_produto: pInfo?.nome || nomeFallback,
             custo_produto: pInfo?.preco_custo || 0,
-            categoria_pai: pInfo?.categoria_pai || 'Outros'
+            categoria_pai: pInfo?.categoria_pai || (String(item.produto_id || '').startsWith('combo-') ? 'Combos' : 'Outros')
           }
         })
         
@@ -61,10 +59,15 @@ export default function Analise() {
 
   const stats = useMemo(() => {
     const hoje = new Date()
+    const mesAtual = hoje.getMonth()
+    const anoAtual = hoje.getFullYear()
+
     const filtrarPorData = (d?: string) => {
       if (!d) return false
       const dv = new Date(d)
-      return periodo === 'hoje' ? dv.toDateString() === hoje.toDateString() : dv.getMonth() === hoje.getMonth()
+      return periodo === 'hoje'
+        ? dv.toDateString() === hoje.toDateString()
+        : dv.getMonth() === mesAtual && dv.getFullYear() === anoAtual
     }
 
     const vendasF = vendas.filter(v => filtrarPorData(v.data_venda))
@@ -74,16 +77,25 @@ export default function Analise() {
     
     const idsF = new Set(vendasF.map(v => v.id))
     const itensF = itensVenda.filter(i => idsF.has(i.venda_id))
+    const vendasMes = vendas.filter(v => {
+      if (!v.data_venda) return false
+      const dv = new Date(v.data_venda)
+      return dv.getMonth() === mesAtual && dv.getFullYear() === anoAtual
+    })
+    const idsMes = new Set(vendasMes.map(v => v.id))
+    const itensMes = itensVenda.filter(i => idsMes.has(i.venda_id))
     
     const lucroVendas = itensF.reduce((s, i) => s + (Number(i.quantidade) * (Number(i.preco_unitario) - Number(i.custo_produto))), 0)
 
     // Dados Gráfico de Linha
-    const dias = vendasF.reduce((acc: any, v) => {
+    const dias = vendasF.reduce((acc: Record<string, number>, v) => {
       const dia = new Date(v.data_venda!).toLocaleDateString('pt-BR', { day: '2-digit' })
       acc[dia] = (acc[dia] || 0) + Number(v.valor_total)
       return acc
     }, {})
-    const dataLinha = Object.entries(dias).map(([name, total]) => ({ name, total }))
+    const dataLinha = Object.entries(dias)
+      .map(([name, total]) => ({ name, total }))
+      .sort((a, b) => Number(a.name) - Number(b.name))
 
     // Dados Gráfico de Teia (Sabores da Categoria Selecionada)
     const saboresMap = new Map<string, number>()
@@ -97,10 +109,21 @@ export default function Analise() {
       .sort((a, b) => b.A - a.A)
       .slice(0, 6)
 
+    const rankingMap = new Map<string, number>()
+    itensMes.forEach(i => {
+      const nome = i.nome_produto || 'Produto'
+      rankingMap.set(nome, (rankingMap.get(nome) || 0) + Number(i.quantidade || 0))
+    })
+
+    const rankProdutosMes = Array.from(rankingMap.entries())
+      .map(([nome, quantidade]) => ({ nome, quantidade }))
+      .sort((a, b) => b.quantidade - a.quantidade)
+      .slice(0, 10)
+
     const invest = produtos.reduce((s, p) => s + (Number(p.estoque) * Number(p.preco_custo)), 0)
     const fiado = vendasF.filter(v => !v.pago).reduce((s, v) => s + Number(v.valor_total), 0)
 
-    return { bruto, liquido: lucroVendas - perdas, perdas, invest, fiado, dataLinha, rankSabores }
+    return { bruto, liquido: lucroVendas - perdas, perdas, invest, fiado, dataLinha, rankSabores, rankProdutosMes }
   }, [vendas, itensVenda, produtos, baixas, periodo, categoriaInspecionar])
 
   return (
@@ -171,6 +194,22 @@ export default function Analise() {
                 <p className="text-[9px] text-red-400 mb-1 tracking-widest">Fiado Pendente</p>
                 <p className="text-3xl font-light tracking-tighter text-red-400 italic">R$ {stats.fiado.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
               </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-xl border border-stone-200 shadow-sm">
+              <h2 className="text-[9px] text-stone-400 mb-4 tracking-widest">Ranking de Produtos Mais Vendidos no Mês</h2>
+              {stats.rankProdutosMes.length === 0 ? (
+                <p className="text-xs text-stone-400">Sem vendas no mês atual.</p>
+              ) : (
+                <div className="space-y-2">
+                  {stats.rankProdutosMes.map((item, idx) => (
+                    <div key={`${item.nome}-${idx}`} className="flex items-center justify-between rounded-lg border border-stone-100 bg-stone-50 px-3 py-2 text-xs">
+                      <span className="text-stone-900">{idx + 1}. {item.nome}</span>
+                      <span className="text-stone-500">{item.quantidade} un.</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}

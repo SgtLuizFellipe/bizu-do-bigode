@@ -119,6 +119,40 @@ export default function GestaoCobrancas() {
     window.open(`https://wa.me/55${d.telefone.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank')
   }
 
+  function exportarPlanilhaCobrancas() {
+    if (devedores.length === 0) {
+      toast.error('Sem dados para exportar.')
+      return
+    }
+
+    const cabecalho = ['POSTO', 'NOME', 'COMPANHIA', 'TELEFONE', 'TOTAL_PENDENTE', 'DETALHES']
+    const linhas = devedores.map(d => {
+      const detalhesLimpos = d.detalhes.replace(/\n/g, ' | ').replace(/"/g, '""')
+      const telefone = (d.telefone || '').replace(/\D/g, '')
+      return [
+        d.posto || '',
+        d.nome || '',
+        d.companhia || '',
+        telefone,
+        d.total.toFixed(2),
+        detalhesLimpos
+      ].map(valor => `"${String(valor)}"`).join(';')
+    })
+
+    const csv = [cabecalho.join(';'), ...linhas].join('\n')
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    const stamp = new Date().toISOString().slice(0, 10)
+    link.href = url
+    link.download = `cobrancas_pendentes_${stamp}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+    toast.success('Planilha exportada com sucesso.')
+  }
+
   const filtrados = devedores.filter(d => d.nome.toLowerCase().includes(busca.toLowerCase()) || d.companhia.toLowerCase().includes(busca.toLowerCase()))
 
   return (
@@ -136,6 +170,13 @@ export default function GestaoCobrancas() {
           placeholder="Buscar por nome ou companhia..."
           className="mb-8 w-full rounded-lg border border-stone-200 bg-white px-4 py-3 text-sm outline-none ring-1 ring-stone-900/5 focus:border-stone-400 shadow-sm"
         />
+
+        <button
+          onClick={exportarPlanilhaCobrancas}
+          className="mb-8 w-full rounded-lg bg-white border border-stone-200 py-3 text-[10px] font-bold uppercase tracking-widest text-stone-700 hover:bg-stone-50 transition-all"
+        >
+          Exportar Planilha de Cobranças (CSV)
+        </button>
 
         <div className="space-y-4">
           {filtrados.map((d) => (
