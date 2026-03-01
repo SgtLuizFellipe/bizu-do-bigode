@@ -1,24 +1,16 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState } from 'react'
 import { toast } from 'sonner'
 import { supabase } from '../../lib/supabase'
 
 export default function Login() {
   const [email, setEmail] = useState('')
   const [senha, setSenha] = useState('')
-  const [erro, setErro] = useState('')
   const [carregando, setCarregando] = useState(false)
-  const router = useRouter()
-
-  useEffect(() => {
-    supabase.auth.signOut()
-  }, [])
 
   async function entrar(e: React.FormEvent) {
     e.preventDefault()
-    setErro('')
     
     if (!email.trim() || !senha) {
       toast.error('Preencha as credenciais.')
@@ -40,7 +32,6 @@ export default function Login() {
         } else {
           toast.error('Credenciais inválidas.')
         }
-        setErro('Falha na autenticação.')
         setCarregando(false)
         return
       }
